@@ -85,10 +85,16 @@ com `String.prototype.slice`, lembrar que ele é 0-based e exclusivo no fim →
   contrato** (não vem no arquivo; é convenção — registrar como constante).
 - **`PREEXE` (strike) e `DATVEN` (vencimento)** só são preenchidos para registros
   de mercado de opções/termo; em ações à vista vêm zerados.
-- **`CODBDI`** segmenta o tipo de papel (ex.: `02` lote padrão, `78` opções de
-  compra, `82` opções de venda, `96` fracionário…). **Para o nosso filtro de
-  opções, o discriminador confiável é `TPMERC` (070/080)**, não o CODBDI — use
-  TPMERC como filtro primário.
+- ⚠️ **`PREEXE` (189–201, BRL, `Dec=2`) ≠ `PTOEXE` (218–230, `Dec=6`).** O
+  `PTOEXE` é o strike **em PONTOS**, usado só em opções referenciadas em **dólar**.
+  **Nós usamos sempre o `PREEXE` (em BRL).** Não "corrigir" o parser achando que o
+  strike está na posição errada — quem aponta 218–230 está olhando o `PTOEXE`.
+- **`CODBDI` (11–12) ≠ `TPMERC` (25–27).** O `CODBDI` segmenta o tipo de papel
+  (ex.: `02` lote padrão, `78` opções de compra, `82` opções de venda, `96`
+  fracionário…) — e seus `78`/`82` **também** significam "opção de compra/venda",
+  mas por **outro critério** (boletim diário). ⚠️ **O discriminador CALL/PUT que
+  usamos é o `TPMERC` (070/080), nunca o CODBDI.** Confirmado: o parser
+  (`b3-cotahist.ts`) deriva `tipoOpcao` exclusivamente do `TPMERC`.
 - **Datas** estão em `AAAAMMDD` (sem separador).
 - **Texto (`X`)** vem preenchido com espaços à direita → aplicar `trim()`.
 

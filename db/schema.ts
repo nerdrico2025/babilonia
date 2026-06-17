@@ -20,6 +20,7 @@ import {
   jsonb,
   timestamp,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /** Precisão padrão para valores em BRL (até bilhões, 2 casas). */
@@ -169,6 +170,83 @@ export const watchlist = pgTable("watchlist", {
     .defaultNow(),
 });
 
+// ── opcao_cotahist (cadeia de opções ingerida do COTAHIST) ───────────────────
+// Cada linha é uma opção (CALL/PUT) num pregão, parseada do arquivo COTAHIST da
+// B3 (registro tipo 01, ver `lib/integrations/b3-cotahist.ts` e
+// `docs/apis/b3-cotahist.md`). Dado de FECHAMENTO (EOD), ingerido por job batch
+// (`scripts/ingestao-cotahist.ts`), NÃO em request-por-tela (§5.1).
+//
+// Gregas/IV/IV Rank NÃO ficam aqui — são CALCULADAS depois pelo `options-math`
+// a partir destes preços + spot + taxa (§18.1). Esta tabela é a matéria-prima.
+//
+// Sem open interest na fonte (§6.4): a liquidez sai de volume + nº de negócios +
+// spread (bid/ask), todos presentes aqui.
+export const opcaoCotahist = pgTable(
+  "opcao_cotahist",
+  {
+    id: serial("id").primaryKey(),
+    /** CODNEG — ticker exato da opção (ex.: "PETRF336"). */
+    optionSymbol: text("option_symbol").notNull(),
+    /**
+     * Ativo-objeto derivado por heurística (raiz do ticker + watchlist, §6.4).
+     * `null` quando a raiz não casa (ou casa de forma ambígua) com a watchlist —
+     * no MVP não tentamos mapear toda a B3, então o vínculo pode faltar.
+     */
+    underlying: text("underlying"),
+    /** Tipo da opção (call/put), derivado do TPMERC 070/080 na ingestão. */
+    kind: optionKind("kind").notNull(),
+    /** PREEXE — preço de exercício (strike) em BRL. */
+    strike: brl("strike").notNull(),
+    /** DATAPREGAO — pregão (fechamento) que originou a linha. */
+    tradeDate: timestamp("trade_date", { withTimezone: true }).notNull(),
+    /** DATVEN — vencimento da opção. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+
+    // Preços do pregão (BRL). 0,00 = sem negócio/oferta naquele campo.
+    /** PREABE — abertura. */
+    precoAbertura: brl("preco_abertura").notNull(),
+    /** PREMIN — mínimo. */
+    precoMinimo: brl("preco_minimo").notNull(),
+    /** PREMED — médio. */
+    precoMedio: brl("preco_medio").notNull(),
+    /** PREMAX — máximo. */
+    precoMaximo: brl("preco_maximo").notNull(),
+    /** PREULT — último negócio = FECHAMENTO (entrada do Black-Scholes). */
+    precoFechamento: brl("preco_fechamento").notNull(),
+    /** PREOFC — melhor oferta de compra (bid). 0 = sem oferta. */
+    bid: brl("bid").notNull(),
+    /** PREOFV — melhor oferta de venda (ask). 0 = sem oferta. */
+    ask: brl("ask").notNull(),
+
+    // Liquidez (sem OI — §6.4).
+    /** VOLTOT — volume financeiro do pregão (BRL). Até 18 dígitos. */
+    volumeFinanceiro: numeric("volume_financeiro", {
+      precision: 18,
+      scale: 2,
+    }).notNull(),
+    /** TOTNEG — número de negócios no pregão. */
+    numeroNegocios: integer("numero_negocios").notNull(),
+    /** QUATOT — quantidade total de títulos negociados. Até 18 dígitos. */
+    quantidadeTitulos: numeric("quantidade_titulos", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    /** FATCOT — fator de cotação (1, 1000…); afeta o prêmio efetivo se ≠ 1. */
+    fatorCotacao: integer("fator_cotacao").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Re-rodar o mesmo pregão não duplica: o upsert casa por (ticker, pregão).
+    uniqueIndex("opcao_cotahist_symbol_data_uq").on(t.optionSymbol, t.tradeDate),
+  ],
+);
+
 // ── api_cache ────────────────────────────────────────────────────────────────
 // Cache genérico das integrações (brapi/OpLab) com TTL (§6.3). A camada de
 // integração grava aqui o payload JSON e a data de expiração.
@@ -218,5 +296,7 @@ export type Ticket = typeof ticket.$inferSelect;
 export type NewTicket = typeof ticket.$inferInsert;
 export type Watchlist = typeof watchlist.$inferSelect;
 export type NewWatchlist = typeof watchlist.$inferInsert;
+export type OpcaoCotahist = typeof opcaoCotahist.$inferSelect;
+export type NewOpcaoCotahist = typeof opcaoCotahist.$inferInsert;
 export type ApiCache = typeof apiCache.$inferSelect;
 export type NewApiCache = typeof apiCache.$inferInsert;

@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Babilônia — sistema visual (§2, princípio 1: "para leigos").
+  Estética de almanaque editorial: fundo pergaminho quente, tinta azul-profunda,
+  acento LÁPIS-LAZÚLI (aceno à Babilônia) e detalhes em dourado.
+
+  Regra dura: VERDE/ÂMBAR/VERMELHO são reservados ao SIGNIFICADO de risco
+  (semáforo, §10). Nunca usar essas cores como enfeite — assim o sinal de risco
+  sempre "quer dizer" algo. O acento da marca é o lápis (azul), longe dos tons
+  do semáforo, para não competir com ele.
+*/
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-sans: var(--font-sans-base);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-heading);
+
+  /* Tokens de risco (semáforo §10) — cor + versão "suave" p/ fundos. */
+  --color-risco-ok: var(--risco-ok);
+  --color-risco-ok-suave: var(--risco-ok-suave);
+  --color-risco-alerta: var(--risco-alerta);
+  --color-risco-alerta-suave: var(--risco-alerta-suave);
+  --color-risco-perigo: var(--risco-perigo);
+  --color-risco-perigo-suave: var(--risco-perigo-suave);
+  --color-dourado: var(--dourado);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Pergaminho quente + tinta azul-profunda. */
+  --background: oklch(0.985 0.007 83);
+  --foreground: oklch(0.24 0.026 264);
+  --card: oklch(0.998 0.003 83);
+  --card-foreground: oklch(0.24 0.026 264);
+  --popover: oklch(0.998 0.003 83);
+  --popover-foreground: oklch(0.24 0.026 264);
+
+  /* Lápis-lazúli — o acento da marca. */
+  --primary: oklch(0.45 0.123 257);
+  --primary-foreground: oklch(0.99 0.006 83);
+  --secondary: oklch(0.952 0.008 83);
+  --secondary-foreground: oklch(0.28 0.03 264);
+  --muted: oklch(0.957 0.006 83);
+  --muted-foreground: oklch(0.51 0.022 264);
+  --accent: oklch(0.93 0.026 256);
+  --accent-foreground: oklch(0.4 0.11 257);
+
+  --destructive: oklch(0.575 0.21 25);
+  --border: oklch(0.9 0.011 83);
+  --input: oklch(0.9 0.011 83);
+  --ring: oklch(0.45 0.123 257);
+
+  /* Semáforo de risco (§10) — significado, não decoração. */
+  --risco-ok: oklch(0.6 0.14 150);
+  --risco-ok-suave: oklch(0.95 0.045 150);
+  --risco-alerta: oklch(0.72 0.145 75);
+  --risco-alerta-suave: oklch(0.95 0.06 85);
+  --risco-perigo: oklch(0.575 0.21 25);
+  --risco-perigo-suave: oklch(0.95 0.045 25);
+  --dourado: oklch(0.77 0.092 78);
+
+  /* Gráficos (payoff, Fase 1): lápis, dourado, semáforo. */
+  --chart-1: oklch(0.45 0.123 257);
+  --chart-2: oklch(0.6 0.14 150);
+  --chart-3: oklch(0.575 0.21 25);
+  --chart-4: oklch(0.72 0.145 75);
+  --chart-5: oklch(0.77 0.092 78);
+
+  --radius: 0.625rem;
+
+  --sidebar: oklch(0.972 0.008 83);
+  --sidebar-foreground: oklch(0.24 0.026 264);
+  --sidebar-primary: oklch(0.45 0.123 257);
+  --sidebar-primary-foreground: oklch(0.99 0.006 83);
+  --sidebar-accent: oklch(0.93 0.026 256);
+  --sidebar-accent-foreground: oklch(0.4 0.11 257);
+  --sidebar-border: oklch(0.9 0.011 83);
+  --sidebar-ring: oklch(0.45 0.123 257);
+}
+
+.dark {
+  /* Noite tinta-azul. */
+  --background: oklch(0.2 0.022 264);
+  --foreground: oklch(0.95 0.01 83);
+  --card: oklch(0.245 0.026 264);
+  --card-foreground: oklch(0.95 0.01 83);
+  --popover: oklch(0.245 0.026 264);
+  --popover-foreground: oklch(0.95 0.01 83);
+
+  --primary: oklch(0.72 0.11 255);
+  --primary-foreground: oklch(0.2 0.022 264);
+  --secondary: oklch(0.29 0.026 264);
+  --secondary-foreground: oklch(0.95 0.01 83);
+  --muted: oklch(0.29 0.026 264);
+  --muted-foreground: oklch(0.72 0.018 264);
+  --accent: oklch(0.32 0.04 257);
+  --accent-foreground: oklch(0.86 0.06 255);
+
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.72 0.11 255);
+
+  --risco-ok: oklch(0.72 0.15 150);
+  --risco-ok-suave: oklch(0.3 0.06 150);
+  --risco-alerta: oklch(0.8 0.15 80);
+  --risco-alerta-suave: oklch(0.33 0.06 80);
+  --risco-perigo: oklch(0.7 0.19 22);
+  --risco-perigo-suave: oklch(0.32 0.08 22);
+  --dourado: oklch(0.8 0.1 78);
+
+  --chart-1: oklch(0.72 0.11 255);
+  --chart-2: oklch(0.72 0.15 150);
+  --chart-3: oklch(0.7 0.19 22);
+  --chart-4: oklch(0.8 0.15 80);
+  --chart-5: oklch(0.8 0.1 78);
+
+  --sidebar: oklch(0.225 0.024 264);
+  --sidebar-foreground: oklch(0.95 0.01 83);
+  --sidebar-primary: oklch(0.72 0.11 255);
+  --sidebar-primary-foreground: oklch(0.2 0.022 264);
+  --sidebar-accent: oklch(0.32 0.04 257);
+  --sidebar-accent-foreground: oklch(0.86 0.06 255);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.72 0.11 255);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  /* Números financeiros (prêmios, strikes, %) com algarismos tabulares. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}

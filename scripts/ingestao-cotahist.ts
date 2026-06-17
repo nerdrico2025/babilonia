@@ -585,7 +585,28 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   main()
     .then(() => process.exit(0))
     .catch((err) => {
+      // Erro de banco (NeonDbError/pg) traz o MOTIVO real em campos próprios
+      // (code/detail/column/constraint), e o driver embrulha o erro do Postgres
+      // em `.cause`. O `.message` do topo é só o SQL + params — imprimir só ele
+      // (versão antiga) inundava a tela com o dump do lote e MASCARAVA a causa
+      // real (ex.: "relation … does not exist", "project size limit exceeded").
       console.error("\nFalha na ingestão:", err instanceof Error ? err.message : err);
+      // O Postgres real costuma estar em `.cause`; mostre a mensagem e os campos.
+      const pg = (err as { cause?: unknown })?.cause ?? err;
+      if (pg && typeof pg === "object") {
+        const e = pg as Record<string, unknown>;
+        if (e.message && e.message !== (err as { message?: unknown })?.message) {
+          console.error("Causa:", e.message);
+        }
+        console.error("Detalhe Postgres:", {
+          code: e.code,
+          detail: e.detail,
+          column: e.column,
+          constraint: e.constraint,
+          table: e.table,
+          severity: e.severity,
+        });
+      }
       process.exit(1);
     });
 }

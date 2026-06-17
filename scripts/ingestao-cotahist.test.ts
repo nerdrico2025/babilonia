@@ -6,7 +6,7 @@ import {
   construirMapaRaizes,
   derivarAtivoObjeto,
 } from "./ingestao-cotahist";
-import type { NewOpcaoCotahist } from "@/db/schema";
+import type { NewOpcaoCotahist, NewAcaoCotahist } from "@/db/schema";
 
 /**
  * Testes do PIPELINE de ingestão — foco no núcleo PURO `processarLinhas`
@@ -112,12 +112,25 @@ const CALL_ABEV = montarRegistro01({
   FATCOT: "0000001",
 });
 
-/** Ação à vista (TPMERC 010) — não é opção, deve ser pulada. */
+/**
+ * Ação à vista lote-padrão: TPMERC 010 + CODBDI 02. PREEXE/DATVEN ficam ZERADOS
+ * (ação não tem strike nem vencimento) → vai para acao_cotahist.
+ *  - fechamento R$ 38,50; volume R$ 1.000.000,00; 5000 negócios.
+ */
 const ACAO_PETR4 = montarRegistro01({
   TIPREG: "01",
   DATAPREGAO: "20260615",
+  CODBDI: "02",
   CODNEG: "PETR4",
   TPMERC: "010",
+  NOMRES: "PETROBRAS",
+  PREULT: reais13(38.5),
+  PREOFC: reais13(38.49),
+  PREOFV: reais13(38.51),
+  TOTNEG: "05000",
+  VOLTOT: "000000000100000000", // R$ 1.000.000,00
+  FATCOT: "0000001",
+  // PREEXE e DATVEN omitidos → zeros (ação não tem strike/vencimento).
 });
 
 const HEADER = "00" + " ".repeat(243);
@@ -128,17 +141,25 @@ const LIXO_CURTO = "linha curta que não é registro";
 const CALL_CORROMPIDA =
   CALL_PETR.slice(0, 188) + "ABCDEFGHIJKLM" + CALL_PETR.slice(201);
 
-// ── Fake de upsert em memória ────────────────────────────────────────────────
+// ── Fake de upsert em memória (opções + ações) ───────────────────────────────
 
 function upsertFake() {
-  const recebidos: NewOpcaoCotahist[] = [];
-  const lotes: number[] = [];
+  const opcoes: NewOpcaoCotahist[] = [];
+  const acoes: NewAcaoCotahist[] = [];
+  const lotesOpcoes: number[] = [];
+  const lotesAcoes: number[] = [];
   return {
-    recebidos,
-    lotes,
-    upsert: async (registros: NewOpcaoCotahist[]) => {
-      lotes.push(registros.length);
-      recebidos.push(...registros);
+    opcoes,
+    acoes,
+    lotesOpcoes,
+    lotesAcoes,
+    upsertOpcoes: async (registros: NewOpcaoCotahist[]) => {
+      lotesOpcoes.push(registros.length);
+      opcoes.push(...registros);
+    },
+    upsertAcoes: async (registros: NewAcaoCotahist[]) => {
+      lotesAcoes.push(registros.length);
+      acoes.push(...registros);
     },
   };
 }
@@ -147,16 +168,16 @@ const loggerMudo = { warn: () => {} };
 
 // ── processarLinhas ──────────────────────────────────────────────────────────
 
-describe("processarLinhas — filtro + parse + roteamento", () => {
-  it("ingere só as opções e classifica o resto (pulos/erros) corretamente", async () => {
+describe("processarLinhas — roteamento opção vs ação num só stream", () => {
+  it("roteia opções e ações para upserts distintos e classifica o resto", async () => {
     const mapa = construirMapaRaizes(["PETR4", "VALE3"]);
     const fake = upsertFake();
 
     const linhas = [
-      CALL_PETR, // opção → ingere (underlying PETR4)
-      ACAO_PETR4, // ação → pula
+      CALL_PETR, // opção → opcao_cotahist (underlying PETR4)
+      ACAO_PETR4, // ação à vista 010+02 → acao_cotahist
       HEADER, // header → pula
-      PUT_VALE, // opção → ingere (underlying VALE3)
+      PUT_VALE, // opção → opcao_cotahist (underlying VALE3)
       LIXO_CURTO, // tamanho errado → pula
       CALL_CORROMPIDA, // opção corrompida → erro (loga e segue)
       CALL_ABEV, // opção sem match na watchlist → ingere (underlying null)
@@ -165,58 +186,69 @@ describe("processarLinhas — filtro + parse + roteamento", () => {
 
     const rel = await processarLinhas(linhas, {
       resolverObjeto: (s) => derivarAtivoObjeto(s, mapa),
-      upsert: fake.upsert,
-      tamanhoLote: 2, // força mais de um lote
+      upsertOpcoes: fake.upsertOpcoes,
+      upsertAcoes: fake.upsertAcoes,
+      tamanhoLote: 2, // força mais de um lote nas opções
       logger: loggerMudo,
     });
 
     expect(rel.linhasLidas).toBe(8);
     expect(rel.opcoesIngeridas).toBe(3); // call PETR, put VALE, call ABEV
-    expect(rel.linhasPuladas).toBe(4); // ação, header, lixo, trailer
+    expect(rel.acoesIngeridas).toBe(1); // PETR4 à vista
+    expect(rel.linhasPuladas).toBe(3); // header, lixo, trailer
     expect(rel.erros).toBe(1); // call corrompida
 
-    // 3 registros chegaram ao upsert, com os vínculos corretos.
-    expect(fake.recebidos).toHaveLength(3);
-    const porTicker = new Map(fake.recebidos.map((r) => [r.optionSymbol, r]));
-
+    // Opções foram para o upsert de opções, com os vínculos corretos.
+    expect(fake.opcoes).toHaveLength(3);
+    const porTicker = new Map(fake.opcoes.map((r) => [r.optionSymbol, r]));
     expect(porTicker.get("PETRF336")?.kind).toBe("call");
     expect(porTicker.get("PETRF336")?.underlying).toBe("PETR4");
     expect(porTicker.get("PETRF336")?.strike).toBe("33.00");
-    expect(porTicker.get("PETRF336")?.precoFechamento).toBe("1.23");
-
     expect(porTicker.get("VALER450")?.kind).toBe("put");
     expect(porTicker.get("VALER450")?.underlying).toBe("VALE3");
-
-    // Raiz fora da watchlist → vínculo null, mas a opção é ingerida mesmo assim.
     expect(porTicker.get("ABEVA120")?.underlying).toBeNull();
+    expect(fake.lotesOpcoes).toEqual([2, 1]); // 3 opções, lote 2
 
-    // tamanhoLote=2 com 3 registros → lotes [2, 1].
-    expect(fake.lotes).toEqual([2, 1]);
+    // Ação foi para o upsert de ações — e SEM strike/vencimento/kind (a row de
+    // ação nem tem esses campos).
+    expect(fake.acoes).toHaveLength(1);
+    const acao = fake.acoes[0]!;
+    expect(acao.ticker).toBe("PETR4");
+    expect(acao.precoFechamento).toBe("38.50");
+    expect(acao.volumeFinanceiro).toBe("1000000.00");
+    expect(acao.numeroNegocios).toBe(5000);
+    expect("strike" in acao).toBe(false);
+    expect("expiresAt" in acao).toBe(false);
+    expect("kind" in acao).toBe(false);
   });
 
-  it("uma linha corrompida NÃO aborta o arquivo (as demais opções ingressam)", async () => {
+  it("uma linha corrompida NÃO aborta o arquivo (as demais ingressam)", async () => {
     const fake = upsertFake();
-    const rel = await processarLinhas([CALL_CORROMPIDA, PUT_VALE], {
+    const rel = await processarLinhas([CALL_CORROMPIDA, PUT_VALE, ACAO_PETR4], {
       resolverObjeto: () => null,
-      upsert: fake.upsert,
+      upsertOpcoes: fake.upsertOpcoes,
+      upsertAcoes: fake.upsertAcoes,
       logger: loggerMudo,
     });
     expect(rel.erros).toBe(1);
     expect(rel.opcoesIngeridas).toBe(1);
-    expect(fake.recebidos.map((r) => r.optionSymbol)).toEqual(["VALER450"]);
+    expect(rel.acoesIngeridas).toBe(1);
+    expect(fake.opcoes.map((r) => r.optionSymbol)).toEqual(["VALER450"]);
+    expect(fake.acoes.map((r) => r.ticker)).toEqual(["PETR4"]);
   });
 
-  it("não chama upsert quando não há nenhuma opção", async () => {
-    let chamou = false;
-    const rel = await processarLinhas([HEADER, ACAO_PETR4, TRAILER], {
+  it("não chama nenhum upsert quando só há header/trailer/lixo", async () => {
+    const fake = upsertFake();
+    const rel = await processarLinhas([HEADER, TRAILER, LIXO_CURTO], {
       resolverObjeto: () => null,
-      upsert: async () => {
-        chamou = true;
-      },
+      upsertOpcoes: fake.upsertOpcoes,
+      upsertAcoes: fake.upsertAcoes,
       logger: loggerMudo,
     });
-    expect(chamou).toBe(false);
+    expect(fake.lotesOpcoes).toEqual([]);
+    expect(fake.lotesAcoes).toEqual([]);
     expect(rel.opcoesIngeridas).toBe(0);
+    expect(rel.acoesIngeridas).toBe(0);
     expect(rel.linhasPuladas).toBe(3);
   });
 });
@@ -229,10 +261,11 @@ describe("registroParaUpsert — mapeamento de campos", () => {
     const fake = upsertFake();
     await processarLinhas([CALL_PETR], {
       resolverObjeto: () => "PETR4",
-      upsert: fake.upsert,
+      upsertOpcoes: fake.upsertOpcoes,
+      upsertAcoes: fake.upsertAcoes,
       logger: loggerMudo,
     });
-    const r = fake.recebidos[0];
+    const r = fake.opcoes[0];
     expect(r).toBeDefined();
     if (!r) return;
     expect(r.numeroNegocios).toBe(1500);

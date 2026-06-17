@@ -247,6 +247,70 @@ export const opcaoCotahist = pgTable(
   ],
 );
 
+// ── acao_cotahist (ações à vista ingeridas do COTAHIST) ──────────────────────
+// Preço de fechamento (EOD) do ATIVO-OBJETO por pregão, do mesmo arquivo COTAHIST
+// (registro tipo 01, TPMERC=010 + CODBDI=02 — ação à vista lote-padrão, ver
+// `lib/integrations/b3-cotahist.ts`). Decisão 2026-06-17: usar o próprio COTAHIST
+// como fonte do histórico de spot, pré-requisito do IV Rank (backfill de IV
+// histórica precisa do preço do objeto em cada pregão), em vez do tier gratuito
+// da brapi (limitado a 252 pregões / poucos ativos).
+//
+// Espelha `opcao_cotahist`, MENOS o que não se aplica a ação: sem strike, sem
+// vencimento (expires_at), sem kind (call/put), sem ativo-objeto derivado (o
+// ticker JÁ é o objeto).
+export const acaoCotahist = pgTable(
+  "acao_cotahist",
+  {
+    id: serial("id").primaryKey(),
+    /** CODNEG — ticker da ação (ex.: "PETR4"). */
+    ticker: text("ticker").notNull(),
+    /** DATAPREGAO — pregão (fechamento) que originou a linha. */
+    tradeDate: timestamp("trade_date", { withTimezone: true }).notNull(),
+
+    // Preços do pregão (BRL). 0,00 = sem negócio/oferta naquele campo.
+    /** PREABE — abertura. */
+    precoAbertura: brl("preco_abertura").notNull(),
+    /** PREMIN — mínimo. */
+    precoMinimo: brl("preco_minimo").notNull(),
+    /** PREMED — médio. */
+    precoMedio: brl("preco_medio").notNull(),
+    /** PREMAX — máximo. */
+    precoMaximo: brl("preco_maximo").notNull(),
+    /** PREULT — último negócio = FECHAMENTO (spot histórico do objeto). */
+    precoFechamento: brl("preco_fechamento").notNull(),
+    /** PREOFC — melhor oferta de compra (bid). 0 = sem oferta. */
+    bid: brl("bid").notNull(),
+    /** PREOFV — melhor oferta de venda (ask). 0 = sem oferta. */
+    ask: brl("ask").notNull(),
+
+    /** VOLTOT — volume financeiro do pregão (BRL). Até 18 dígitos. */
+    volumeFinanceiro: numeric("volume_financeiro", {
+      precision: 18,
+      scale: 2,
+    }).notNull(),
+    /** TOTNEG — número de negócios no pregão. */
+    numeroNegocios: integer("numero_negocios").notNull(),
+    /** QUATOT — quantidade total de títulos negociados. Até 18 dígitos. */
+    quantidadeTitulos: numeric("quantidade_titulos", {
+      precision: 18,
+      scale: 0,
+    }).notNull(),
+    /** FATCOT — fator de cotação (1, 1000…). */
+    fatorCotacao: integer("fator_cotacao").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Re-rodar o mesmo pregão atualiza em vez de duplicar (idempotência).
+    uniqueIndex("acao_cotahist_ticker_data_uq").on(t.ticker, t.tradeDate),
+  ],
+);
+
 // ── api_cache ────────────────────────────────────────────────────────────────
 // Cache genérico das integrações (brapi/OpLab) com TTL (§6.3). A camada de
 // integração grava aqui o payload JSON e a data de expiração.
@@ -298,5 +362,7 @@ export type Watchlist = typeof watchlist.$inferSelect;
 export type NewWatchlist = typeof watchlist.$inferInsert;
 export type OpcaoCotahist = typeof opcaoCotahist.$inferSelect;
 export type NewOpcaoCotahist = typeof opcaoCotahist.$inferInsert;
+export type AcaoCotahist = typeof acaoCotahist.$inferSelect;
+export type NewAcaoCotahist = typeof acaoCotahist.$inferInsert;
 export type ApiCache = typeof apiCache.$inferSelect;
 export type NewApiCache = typeof apiCache.$inferInsert;

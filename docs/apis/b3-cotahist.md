@@ -2,18 +2,24 @@
 
 > **Fonte oficial:** página de Cotações Históricas da B3
 > (https://www.b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/market-data/historico/mercado-a-vista/cotacoes-historicas/)
-> e o **PDF de layout** `SeriesHistoricas_Layout.pdf`
-> (https://www.b3.com.br/data/files/33/67/B9/50/D84057102C784E47AC094EA8/SeriesHistoricas_Layout.pdf).
-> Confirmado em 2026-06-16.
+> e o **PDF de layout** `SeriesHistoricas_Layout.pdf` — **versionado no repo** em
+> [`docs/apis/SeriesHistoricas_Layout.pdf`](./SeriesHistoricas_Layout.pdf)
+> (original em
+> https://www.b3.com.br/data/files/33/67/B9/50/D84057102C784E47AC094EA8/SeriesHistoricas_Layout.pdf).
+> **Revisão 02, 05/10/2020.** Confirmado em 2026-06-16; layout de ações conferido
+> em 2026-06-17.
 >
-> ⚠️ **Sobre a confirmação do layout:** o PDF oficial é **escaneado/baseado em
-> imagem** (sem camada de texto), então não foi possível extraí-lo
-> programaticamente. As posições de byte abaixo foram conferidas contra **três
-> reproduções fiéis e independentes** do mesmo layout oficial (o template
-> `wilsonfreitas/rbmfbovespa`, parsers públicos em Python e a tabela publicada por
-> terceiros) — todas batem com o spec estável de **245 bytes/registro** em vigor
-> desde 1986. Antes de escrever o parser definitivo, **abrir o PDF num leitor e
-> conferir visualmente** os campos que vamos usar (checklist no fim deste doc).
+> ✅ **O PDF oficial TEM camada de texto extraível** (ex.: `pdftotext -layout
+> docs/apis/SeriesHistoricas_Layout.pdf -`). Todas as posições de byte abaixo
+> foram conferidas **campo a campo contra esse texto**, batendo com o spec estável
+> de **245 bytes/registro**. As reproduções de terceiros (template
+> `wilsonfreitas/rbmfbovespa`, parsers públicos em Python) servem só de reforço.
+>
+> 🔒 **OBRIGATÓRIO ao mexer no parser posicional** (`lib/integrations/b3-cotahist.ts`):
+> conferir os campos alterados **contra o PDF versionado** acima — extraia o texto
+> e cheque `Pos.Inic`/`Pos.Final` de cada campo. Um deslocamento de 1 byte corrompe
+> strikes/vencimentos silenciosamente e contamina o `options-math`; a fonte de
+> verdade está no repo justamente para que essa verificação seja sempre possível.
 
 ## Por que COTAHIST (decisão 2026-06-16)
 
@@ -102,7 +108,7 @@ com `String.prototype.slice`, lembrar que ele é 0-based e exclusivo no fim →
 
 | Código | Significado | Relevância p/ Babilônia |
 |:------:|-------------|--------------------------|
-| `010` | Mercado à vista | objeto (spot) — usado só para pegar o preço do ativo-objeto |
+| **`010`** | **Mercado à vista** | ✅ **ativo-objeto (spot)** — ingerido p/ IV Rank (com CODBDI `02`) |
 | `012` | Exercício de opções de compra | ignorar |
 | `013` | Exercício de opções de venda | ignorar |
 | `017` | Leilão | ignorar |
@@ -133,6 +139,32 @@ O COTAHIST **não traz uma chave direta** "opção → ticker do objeto". Estrat
 > ⚠️ A relação ticker-de-opção → objeto é a parte mais sujeita a borda (mudanças
 > de série, sufixos E/F, opções semanais). No MVP, restringir aos objetos da
 > watchlist reduz o risco.
+
+### Ação à vista (ativo-objeto) — também ingerida (decisão 2026-06-17)
+
+Além das opções, a ingestão captura o **preço de fechamento do ativo-objeto** do
+mesmo arquivo COTAHIST. Motivo: o **IV Rank** precisa do histórico de spot do
+objeto em cada pregão (252 pregões), e o próprio COTAHIST é a fonte EOD já
+validada, pública e sem rate limit — melhor que depender do tier gratuito da brapi
+(limitado a poucos ativos / 252 dias). O parser de ação está em
+`parseRegistroAcao` (`lib/integrations/b3-cotahist.ts`).
+
+- **Discriminador (mesmo registro tipo 01):** `TPMERC == "010"` (vista, tabela
+  TPMERC pág. 10/10) **E** `CODBDI == "02"` (LOTE PADRAO, tabela CODBDI pág.
+  7/10). Os dois juntos isolam a ação no lote redondo — excluindo **fracionário**
+  (`TPMERC 020` / `CODBDI 96`), **direitos/recibos** (`CODBDI 10`) e afins, que
+  não são o ativo-objeto. É **mutuamente exclusivo** do filtro de opções (opção é
+  `070/080`, nunca `010`), então um só stream classifica cada linha sem ambiguidade.
+- **Campos extraídos** (mesmas posições do registro de opção — é o mesmo layout):
+  `CODNEG` (13–24, ticker), `PREABE/PREMAX/PREMIN/PREMED` (57–108), **`PREULT`
+  (109–121, fechamento = spot)**, `PREOFC/PREOFV` (122–147, bid/ask), `TOTNEG`
+  (148–152), `QUATOT` (153–170), `VOLTOT` (171–188), `FATCOT` (211–217).
+- ⚠️ **`PREEXE` (189–201) e `DATVEN` (203–210) são campos de OPÇÃO/TERMO** — em
+  ação vêm zerados. O `parseRegistroAcao` **nem os lê**: a struct de ação não tem
+  strike nem vencimento, logo não há valor espúrio.
+- **Persistência:** tabela **`acao_cotahist`** (espelha `opcao_cotahist` sem
+  strike/vencimento/kind/objeto — o ticker já é o objeto), com **índice único
+  `(ticker, trade_date)`** → re-rodar o mesmo pregão faz upsert, não duplica.
 
 ## ⚠️ Gap explícito: NÃO existe OPEN INTEREST no COTAHIST
 
@@ -214,18 +246,22 @@ operacional** — o app deve degradar com aviso ("não foi possível baixar o
 COTAHIST de hoje automaticamente; baixe manualmente e coloque em …") em vez de
 quebrar (PRD §6.3 / §13, resiliência).
 
-## Checklist de verificação visual contra o PDF oficial
+## Checklist de verificação contra o PDF oficial (obrigatório ao mexer no parser)
 
-Antes de implementar `lib/integrations/b3-cotahist.ts`, abrir
-`SeriesHistoricas_Layout.pdf` e confirmar **a olho** para o registro tipo 01:
+Ao escrever/alterar `lib/integrations/b3-cotahist.ts`, extrair o texto do PDF
+versionado (`pdftotext -layout docs/apis/SeriesHistoricas_Layout.pdf -`) e
+conferir `Pos.Inic`/`Pos.Final` para o registro tipo 01:
 
 - [ ] Total do registro = **245 bytes**.
 - [ ] `CODNEG` em **13–24** (12 bytes).
-- [ ] `TPMERC` em **25–27**, e que **070=compra / 080=venda**.
+- [ ] `CODBDI` em **11–12**, e que **02 = LOTE PADRAO** (tabela CODBDI, pág. 7/10).
+- [ ] `TPMERC` em **25–27**, e que **010=vista / 070=compra / 080=venda** (tabela
+      TPMERC, pág. 10/10).
 - [ ] `PREULT` em **109–121**, `Dec=2`.
+- [ ] `TOTNEG` em **148–152**; `QUATOT` em **153–170**.
 - [ ] `VOLTOT` em **171–188**, `Dec=2`.
-- [ ] `PREEXE` (strike) em **189–201**, `Dec=2`.
-- [ ] `DATVEN` em **203–210**.
+- [ ] `PREEXE` (strike) em **189–201**, `Dec=2` — campo de opção/termo (zerado em ação).
+- [ ] `DATVEN` em **203–210** — campo de opção/termo (zerado em ação).
 - [ ] `FATCOT` em **211–217**.
 - [ ] Confirmar (de novo) que **não há** campo de open interest.
 

@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest";
 import {
   parseLinhaCotahist,
   isOpcaoDeInteresse,
+  parseRegistroAcao,
+  isAcaoVistaLotePadrao,
   CotahistCampoInvalidoError,
   TAMANHO_REGISTRO,
 } from "@/lib/integrations/b3-cotahist";
@@ -299,5 +301,100 @@ describe("parseLinhaCotahist — política de erros", () => {
       FATCOT: "0000001",
     });
     expect(() => parseLinhaCotahist(linha)).toThrow(CotahistCampoInvalidoError);
+  });
+});
+
+// ── Ações à vista ────────────────────────────────────────────────────────────
+
+/**
+ * Exemplo AÇÃO À VISTA — PETR4, lote-padrão (CODBDI 02 + TPMERC 010), pregão
+ * 15/06/2026. PREEXE e DATVEN ZERADOS (ação não tem strike nem vencimento).
+ *  - fechamento (PREULT) = R$ 38,50 → 3850
+ *  - volume (VOLTOT) = R$ 12.000.000,00 → 1200000000
+ *  - 8000 negócios; 1.500.000 títulos.
+ */
+const LINHA_ACAO = montarRegistro01({
+  TIPREG: "01",
+  DATAPREGAO: "20260615",
+  CODBDI: "02", // LOTE PADRAO (tabela CODBDI, pág. 7/10)
+  CODNEG: "PETR4",
+  TPMERC: "010", // VISTA (tabela TPMERC, pág. 10/10)
+  NOMRES: "PETROBRAS",
+  PREULT: "0000000003850", // R$ 38,50
+  PREOFC: "0000000003849",
+  PREOFV: "0000000003851",
+  TOTNEG: "08000",
+  QUATOT: "000000000001500000",
+  VOLTOT: "000000001200000000", // R$ 12.000.000,00
+  FATCOT: "0000001",
+  // PREEXE e DATVEN omitidos → "000…0" (zeros).
+});
+
+describe("parseRegistroAcao — extração de ação à vista", () => {
+  it("extrai ticker, fechamento e volume corretos", () => {
+    const reg = parseRegistroAcao(LINHA_ACAO);
+    expect(reg).not.toBeNull();
+    if (!reg) return;
+
+    expect(reg.codNeg).toBe("PETR4");
+    expect(reg.tpMerc).toBe("010");
+    expect(reg.codBdi).toBe("02");
+    expect(reg.preUlt).toBe(38.5); // fechamento
+    expect(reg.preOfc).toBe(38.49); // bid
+    expect(reg.preOfv).toBe(38.51); // ask
+    expect(reg.totNeg).toBe(8000);
+    expect(reg.quaTot).toBe(1_500_000);
+    expect(reg.volTot).toBe(12_000_000); // Dec=2
+    expect(reg.dataPregao.getUTCFullYear()).toBe(2026);
+    expect(reg.dataPregao.getUTCDate()).toBe(15);
+  });
+
+  it("NÃO produz strike nem vencimento espúrios (a struct nem os tem)", () => {
+    const reg = parseRegistroAcao(LINHA_ACAO);
+    expect(reg).not.toBeNull();
+    if (!reg) return;
+    // PREEXE/DATVEN vinham zerados; a row de ação não os carrega.
+    expect("preExe" in reg).toBe(false);
+    expect("datVen" in reg).toBe(false);
+    expect("tipoOpcao" in reg).toBe(false);
+  });
+
+  it("retorna null para tamanho errado / TIPREG ≠ 01", () => {
+    expect(parseRegistroAcao("curta")).toBeNull();
+    expect(parseRegistroAcao("00" + " ".repeat(243))).toBeNull();
+  });
+});
+
+describe("discriminadores opção vs ação — mutuamente exclusivos", () => {
+  it("uma ação NÃO é vista como opção, e vice-versa", () => {
+    // Ação à vista: é ação, não é opção.
+    expect(isAcaoVistaLotePadrao(LINHA_ACAO)).toBe(true);
+    expect(isOpcaoDeInteresse(LINHA_ACAO)).toBe(false);
+
+    // Opção (CALL/PUT): é opção, não é ação à vista.
+    expect(isOpcaoDeInteresse(LINHA_CALL)).toBe(true);
+    expect(isAcaoVistaLotePadrao(LINHA_CALL)).toBe(false);
+    expect(isAcaoVistaLotePadrao(LINHA_PUT)).toBe(false);
+  });
+
+  it("à vista FRACIONÁRIO (TPMERC 020) ou CODBDI ≠ 02 não conta como ação-objeto", () => {
+    const fracionario = montarRegistro01({
+      TIPREG: "01",
+      DATAPREGAO: "20260615",
+      CODBDI: "96", // fracionário
+      CODNEG: "PETR4F",
+      TPMERC: "020",
+    });
+    expect(isAcaoVistaLotePadrao(fracionario)).toBe(false);
+
+    // Vista (010) mas CODBDI fora de 02 (ex.: 10 = direitos/recibos) → fora.
+    const direitos = montarRegistro01({
+      TIPREG: "01",
+      DATAPREGAO: "20260615",
+      CODBDI: "10",
+      CODNEG: "PETR1",
+      TPMERC: "010",
+    });
+    expect(isAcaoVistaLotePadrao(direitos)).toBe(false);
   });
 });

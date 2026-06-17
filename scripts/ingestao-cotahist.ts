@@ -36,22 +36,29 @@ import { sql } from "drizzle-orm";
 
 import {
   isOpcaoDeInteresse,
+  isAcaoVistaLotePadrao,
   parseLinhaCotahist,
+  parseRegistroAcao,
 } from "@/lib/integrations/b3-cotahist";
-import type { RegistroCotahist } from "@/lib/integrations/b3-cotahist";
+import type {
+  RegistroCotahist,
+  RegistroAcaoCotahist,
+} from "@/lib/integrations/b3-cotahist";
 import { getDb } from "@/db";
-import { opcaoCotahist, watchlist } from "@/db/schema";
-import type { NewOpcaoCotahist } from "@/db/schema";
+import { opcaoCotahist, acaoCotahist, watchlist } from "@/db/schema";
+import type { NewOpcaoCotahist, NewAcaoCotahist } from "@/db/schema";
 
 // ── Tipos do núcleo ──────────────────────────────────────────────────────────
 
 /** Contagens reportadas ao fim da ingestão (§ "robustez" do prompt). */
 export interface RelatorioIngestao {
-  /** Total de linhas lidas do arquivo (todas, incl. header/trailer/ações). */
+  /** Total de linhas lidas do arquivo (todas, incl. header/trailer). */
   linhasLidas: number;
   /** Opções (070/080) parseadas com sucesso e enviadas ao upsert. */
   opcoesIngeridas: number;
-  /** Linhas descartadas SEM erro: não-opção, header, trailer, registro≠01. */
+  /** Ações à vista lote-padrão (010 + 02) enviadas ao upsert. */
+  acoesIngeridas: number;
+  /** Linhas descartadas SEM erro: nem opção nem ação (header, trailer, frac…). */
   linhasPuladas: number;
   /** Linhas que o parser REJEITOU por corrupção (lançou) — logadas, não fatais. */
   erros: number;
@@ -61,8 +68,10 @@ export interface RelatorioIngestao {
 export interface OpcoesProcessamento {
   /** Resolve o ativo-objeto (ou `null`) a partir do ticker da opção. */
   resolverObjeto: (optionSymbol: string) => string | null;
-  /** Persiste um lote de linhas (upsert). Erro aqui é FATAL (aborta o job). */
-  upsert: (registros: NewOpcaoCotahist[]) => Promise<void>;
+  /** Persiste um lote de OPÇÕES (upsert). Erro aqui é FATAL (aborta o job). */
+  upsertOpcoes: (registros: NewOpcaoCotahist[]) => Promise<void>;
+  /** Persiste um lote de AÇÕES (upsert). Erro aqui é FATAL (aborta o job). */
+  upsertAcoes: (registros: NewAcaoCotahist[]) => Promise<void>;
   /** Tamanho do lote de upsert (default 500). */
   tamanhoLote?: number;
   /** Para avisos de linha corrompida (default `console`). */
@@ -74,20 +83,21 @@ const TAMANHO_LOTE_PADRAO = 500;
 // ── Núcleo PURO (testável sem rede/disco/banco) ──────────────────────────────
 
 /**
- * Varre as linhas, filtra opções com `isOpcaoDeInteresse` ANTES do parse
- * completo, parseia as que passam e as envia ao `upsert` em lotes. Retorna o
- * relatório de contagens.
+ * Varre as linhas UMA vez e ROTEIA cada uma: opção (070/080) → `opcao_cotahist`,
+ * ação à vista lote-padrão (010 + 02) → `acao_cotahist`. Os filtros baratos
+ * (`isOpcaoDeInteresse` / `isAcaoVistaLotePadrao`, mutuamente exclusivos) decidem
+ * o destino ANTES do parse completo. Envia em lotes separados e retorna o
+ * relatório de contagens (opções vs ações discriminadas).
  *
  * Política de robustez (decisão documentada — prompt §5):
- *  - `isOpcaoDeInteresse(linha) === false` → PULA (não-opção, header `00`,
- *    trailer `99`, ação à vista). Conta em `linhasPuladas`. É o caso comum.
+ *  - linha que não é opção NEM ação à vista lote-padrão → PULA (header `00`,
+ *    trailer `99`, fracionário, direitos…). Conta em `linhasPuladas`.
  *  - parser LANÇA (`CotahistCampoInvalidoError`) → corrupção/byte-shift numa
- *    linha que parecia opção: LOGA o trecho e CONTINUA (não aborta o arquivo
- *    por uma linha ruim); conta em `erros`.
- *  - parser retorna `null` após o filtro (não deveria ocorrer) → trata como
- *    pulo defensivo (`linhasPuladas`).
- *  - opção sem `DATVEN` (anômalo: opção sem vencimento) → conta como `erro` e
- *    pula (a tabela exige vencimento).
+ *    linha já roteada: LOGA o trecho e CONTINUA (não aborta o arquivo por uma
+ *    linha ruim); conta em `erros`.
+ *  - parser retorna `null` após o filtro (não deveria ocorrer) → pulo defensivo.
+ *  - opção sem `DATVEN` (anômalo) → conta como `erro` e pula (tabela exige
+ *    vencimento). Ação NÃO tem vencimento, então não há checagem equivalente.
  *  - falha no `upsert` (banco) → PROPAGA: é sistêmica, não "uma linha ruim".
  *
  * Aceita iterável SÍncrono (array, nos testes) ou ASSÍNCrono (readline, no job):
@@ -102,61 +112,78 @@ export async function processarLinhas(
   const relatorio: RelatorioIngestao = {
     linhasLidas: 0,
     opcoesIngeridas: 0,
+    acoesIngeridas: 0,
     linhasPuladas: 0,
     erros: 0,
   };
 
-  let lote: NewOpcaoCotahist[] = [];
-  const descarregar = async () => {
-    if (lote.length === 0) return;
-    await opts.upsert(lote);
-    lote = [];
+  let loteOpcoes: NewOpcaoCotahist[] = [];
+  const descarregarOpcoes = async () => {
+    if (loteOpcoes.length === 0) return;
+    await opts.upsertOpcoes(loteOpcoes);
+    loteOpcoes = [];
+  };
+  let loteAcoes: NewAcaoCotahist[] = [];
+  const descarregarAcoes = async () => {
+    if (loteAcoes.length === 0) return;
+    await opts.upsertAcoes(loteAcoes);
+    loteAcoes = [];
   };
 
   for await (const linha of linhas) {
     relatorio.linhasLidas++;
 
-    // Filtro barato: descarta tudo que não é opção 070/080 antes de parsear.
-    if (!isOpcaoDeInteresse(linha)) {
+    const ehOpcao = isOpcaoDeInteresse(linha);
+    const ehAcao = !ehOpcao && isAcaoVistaLotePadrao(linha);
+
+    // Nem opção nem ação à vista lote-padrão: descarta (caso comum).
+    if (!ehOpcao && !ehAcao) {
       relatorio.linhasPuladas++;
       continue;
     }
 
-    let reg: RegistroCotahist | null;
     try {
-      reg = parseLinhaCotahist(linha);
+      if (ehOpcao) {
+        const reg: RegistroCotahist | null = parseLinhaCotahist(linha);
+        // Defensivo: após o filtro, o parser não deveria devolver null.
+        if (reg === null) {
+          relatorio.linhasPuladas++;
+          continue;
+        }
+        // Opção sem vencimento é anômalo (a tabela exige `expiresAt`).
+        if (reg.datVen === null) {
+          relatorio.erros++;
+          logger.warn(
+            `COTAHIST: opção ${reg.codNeg} sem DATVEN no pregão ${reg.dataPregao.toISOString()} — pulada`,
+          );
+          continue;
+        }
+        loteOpcoes.push(registroParaUpsert(reg, opts.resolverObjeto(reg.codNeg)));
+        relatorio.opcoesIngeridas++;
+        if (loteOpcoes.length >= tamanhoLote) await descarregarOpcoes();
+      } else {
+        const reg: RegistroAcaoCotahist | null = parseRegistroAcao(linha);
+        if (reg === null) {
+          relatorio.linhasPuladas++;
+          continue;
+        }
+        loteAcoes.push(registroAcaoParaUpsert(reg));
+        relatorio.acoesIngeridas++;
+        if (loteAcoes.length >= tamanhoLote) await descarregarAcoes();
+      }
     } catch (erro) {
-      // Corrupção numa linha que passou no filtro: loga e segue (não aborta).
+      // Corrupção numa linha já roteada: loga e segue (não aborta o arquivo).
       relatorio.erros++;
       logger.warn(
         `COTAHIST: linha ${relatorio.linhasLidas} rejeitada (${
           erro instanceof Error ? erro.message : String(erro)
         }); trecho="${linha.slice(0, 60)}"`,
       );
-      continue;
     }
-
-    // Defensivo: após o filtro, o parser não deveria devolver null.
-    if (reg === null) {
-      relatorio.linhasPuladas++;
-      continue;
-    }
-
-    // Opção sem vencimento é anômalo (a tabela exige `expiresAt`): conta e pula.
-    if (reg.datVen === null) {
-      relatorio.erros++;
-      logger.warn(
-        `COTAHIST: opção ${reg.codNeg} sem DATVEN no pregão ${reg.dataPregao.toISOString()} — pulada`,
-      );
-      continue;
-    }
-
-    lote.push(registroParaUpsert(reg, opts.resolverObjeto(reg.codNeg)));
-    relatorio.opcoesIngeridas++;
-    if (lote.length >= tamanhoLote) await descarregar();
   }
 
-  await descarregar();
+  await descarregarOpcoes();
+  await descarregarAcoes();
   return relatorio;
 }
 
@@ -182,6 +209,31 @@ export function registroParaUpsert(
     strike: reg.preExe.toFixed(2),
     tradeDate: reg.dataPregao,
     expiresAt: reg.datVen,
+    precoAbertura: reg.preAbe.toFixed(2),
+    precoMinimo: reg.preMin.toFixed(2),
+    precoMedio: reg.preMed.toFixed(2),
+    precoMaximo: reg.preMax.toFixed(2),
+    precoFechamento: reg.preUlt.toFixed(2),
+    bid: reg.preOfc.toFixed(2),
+    ask: reg.preOfv.toFixed(2),
+    volumeFinanceiro: reg.volTot.toFixed(2),
+    numeroNegocios: reg.totNeg,
+    quantidadeTitulos: Math.round(reg.quaTot).toString(),
+    fatorCotacao: reg.fatCot,
+  };
+}
+
+/**
+ * Converte um `RegistroAcaoCotahist` na linha de upsert de `acao_cotahist`. Sem
+ * strike/vencimento/kind/objeto — o ticker já É o ativo-objeto (espelha o
+ * `registroParaUpsert`, na sua versão de ação).
+ */
+export function registroAcaoParaUpsert(
+  reg: RegistroAcaoCotahist,
+): NewAcaoCotahist {
+  return {
+    ticker: reg.codNeg,
+    tradeDate: reg.dataPregao,
     precoAbertura: reg.preAbe.toFixed(2),
     precoMinimo: reg.preMin.toFixed(2),
     precoMedio: reg.preMed.toFixed(2),
@@ -375,6 +427,34 @@ async function upsertLote(
     });
 }
 
+/** Upsert de um lote de AÇÕES: idempotente por (ticker, trade_date). */
+async function upsertLoteAcoes(
+  db: ReturnType<typeof getDb>,
+  registros: NewAcaoCotahist[],
+): Promise<void> {
+  if (registros.length === 0) return;
+  await db
+    .insert(acaoCotahist)
+    .values(registros)
+    .onConflictDoUpdate({
+      target: [acaoCotahist.ticker, acaoCotahist.tradeDate],
+      set: {
+        precoAbertura: sql`excluded.preco_abertura`,
+        precoMinimo: sql`excluded.preco_minimo`,
+        precoMedio: sql`excluded.preco_medio`,
+        precoMaximo: sql`excluded.preco_maximo`,
+        precoFechamento: sql`excluded.preco_fechamento`,
+        bid: sql`excluded.bid`,
+        ask: sql`excluded.ask`,
+        volumeFinanceiro: sql`excluded.volume_financeiro`,
+        numeroNegocios: sql`excluded.numero_negocios`,
+        quantidadeTitulos: sql`excluded.quantidade_titulos`,
+        fatorCotacao: sql`excluded.fator_cotacao`,
+        updatedAt: new Date(),
+      },
+    });
+}
+
 // ── main() ───────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -409,7 +489,8 @@ async function main(): Promise<void> {
   const inicio = Date.now();
   const relatorio = await processarLinhas(abrirFonte(arg), {
     resolverObjeto: (symbol) => derivarAtivoObjeto(symbol, mapaRaizes),
-    upsert: (registros) => upsertLote(db, registros),
+    upsertOpcoes: (registros) => upsertLote(db, registros),
+    upsertAcoes: (registros) => upsertLoteAcoes(db, registros),
     logger: console,
   });
 
@@ -418,6 +499,7 @@ async function main(): Promise<void> {
     `\nIngestão concluída em ${seg}s:\n` +
       `  linhas lidas .......... ${relatorio.linhasLidas}\n` +
       `  opções ingeridas ...... ${relatorio.opcoesIngeridas}\n` +
+      `  ações ingeridas ....... ${relatorio.acoesIngeridas}\n` +
       `  linhas puladas ........ ${relatorio.linhasPuladas}\n` +
       `  erros (linhas ruins) .. ${relatorio.erros}`,
   );

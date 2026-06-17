@@ -37,6 +37,19 @@ export const TIPREG_COTACAO = "01";
 export const TPMERC_CALL = "070";
 /** TPMERC — opções de VENDA (PUT). */
 export const TPMERC_PUT = "080";
+/**
+ * TPMERC — mercado À VISTA (`010` = "VISTA" na tabela TPMERC do PDF, pág. 10/10,
+ * Revisão 02). Usado para capturar o preço do ATIVO-OBJETO (necessário para o
+ * IV Rank — decisão 2026-06-17 de usar o próprio COTAHIST como histórico de spot).
+ */
+export const TPMERC_VISTA = "010";
+/**
+ * CODBDI — LOTE PADRÃO (`02` = "LOTE PADRAO" na tabela CODBDI do PDF, pág. 7/10,
+ * Revisão 02). Combinado com `TPMERC=010`, identifica a ação à vista no lote
+ * redondo — excluindo fracionário (CODBDI 96 / TPMERC 020), direitos/recibos
+ * (CODBDI 10), etc., que NÃO são o ativo-objeto que queremos.
+ */
+export const CODBDI_LOTE_PADRAO = "02";
 
 /**
  * Tamanho do contrato de opção de ação na B3 = **100 ações por contrato**. NÃO
@@ -101,6 +114,50 @@ export interface RegistroCotahist {
   readonly fatCot: number;
   /** Tipo de opção derivado de TPMERC (`CALL`/`PUT`), ou `null`. */
   readonly tipoOpcao: TipoOpcao | null;
+}
+
+/**
+ * Registro tipo 01 de uma AÇÃO À VISTA (lote-padrão) já parseado. É um subconjunto
+ * do `RegistroCotahist`: ação NÃO tem strike, vencimento nem tipo call/put, então
+ * esses campos simplesmente NÃO EXISTEM aqui (em vez de virem zerados/espúrios).
+ * As posições de byte dos campos são as MESMAS do registro de opção — é o mesmo
+ * layout de 245 bytes; muda só o conjunto de campos preenchidos (PDF Rev. 02).
+ */
+export interface RegistroAcaoCotahist {
+  /** TIPREG — sempre `"01"`. */
+  readonly tipreg: typeof TIPREG_COTACAO;
+  /** DATAPREGAO — data do pregão (fechamento). */
+  readonly dataPregao: Date;
+  /** CODBDI — segmento; aqui sempre `"02"` (lote padrão). */
+  readonly codBdi: string;
+  /** CODNEG — ticker da ação (ex.: `"PETR4"`), com `trim`. */
+  readonly codNeg: string;
+  /** TPMERC — tipo de mercado; aqui sempre `"010"` (à vista). */
+  readonly tpMerc: string;
+  /** NOMRES — nome resumido do emissor, `trim`. */
+  readonly nomRes: string;
+  /** PREABE — preço de abertura (BRL). */
+  readonly preAbe: number;
+  /** PREMAX — preço máximo (BRL). */
+  readonly preMax: number;
+  /** PREMIN — preço mínimo (BRL). */
+  readonly preMin: number;
+  /** PREMED — preço médio (BRL). */
+  readonly preMed: number;
+  /** PREULT — preço do último negócio = **fechamento** (BRL, spot do objeto). */
+  readonly preUlt: number;
+  /** PREOFC — melhor oferta de compra (bid, BRL). */
+  readonly preOfc: number;
+  /** PREOFV — melhor oferta de venda (ask, BRL). */
+  readonly preOfv: number;
+  /** TOTNEG — número de negócios no pregão. */
+  readonly totNeg: number;
+  /** QUATOT — quantidade total de títulos negociados. */
+  readonly quaTot: number;
+  /** VOLTOT — volume financeiro total do pregão (BRL). */
+  readonly volTot: number;
+  /** FATCOT — fator de cotação (1, 1000…). */
+  readonly fatCot: number;
 }
 
 // ── Erro ─────────────────────────────────────────────────────────────────────
@@ -260,4 +317,61 @@ function parseDataObrigatoria(bruto: string, nomeCampo: string): Date {
   const data = parseDataAaaammdd(bruto, nomeCampo);
   if (data === null) throw new CotahistCampoInvalidoError(nomeCampo, bruto);
   return data;
+}
+
+// ── Ações à vista (lote-padrão) ──────────────────────────────────────────────
+
+/**
+ * Diz se a linha é uma AÇÃO À VISTA no lote-padrão que nos interessa: registro
+ * tipo 01 (245 bytes), `TPMERC=010` (vista) E `CODBDI=02` (lote padrão). Como o
+ * `isOpcaoDeInteresse`, é barata, NUNCA lança e serve de filtro na ingestão.
+ *
+ * É MUTUAMENTE EXCLUSIVA com `isOpcaoDeInteresse`: opção tem TPMERC 070/080
+ * (nunca 010), então nenhuma linha cai nos dois filtros.
+ */
+export function isAcaoVistaLotePadrao(linha: string): boolean {
+  const l = removerQuebraLinha(linha);
+  if (l.length !== TAMANHO_REGISTRO) return false;
+  if (lerTipreg(l) !== TIPREG_COTACAO) return false;
+  return campo(l, 25, 27) === TPMERC_VISTA && campo(l, 11, 12) === CODBDI_LOTE_PADRAO;
+}
+
+/**
+ * Faz o parse de UMA linha do COTAHIST como AÇÃO À VISTA.
+ *
+ * Diferente do `parseLinhaCotahist`, NÃO lê PREEXE (189–201) nem DATVEN
+ * (203–210): em ação esses campos vêm zerados e não representam dado — logo a
+ * struct de ação não os contém e não há strike/vencimento espúrios.
+ *
+ * @returns `RegistroAcaoCotahist` se for um registro tipo 01 de 245 bytes; `null`
+ *   se NÃO for (tamanho ≠ 245, ou TIPREG ≠ "01"). NÃO valida TPMERC/CODBDI — a
+ *   classificação ação-vs-opção é feita pelos discriminadores `is*` na ingestão.
+ * @throws {CotahistCampoInvalidoError} campo numérico ilegível (corrupção).
+ */
+export function parseRegistroAcao(linha: string): RegistroAcaoCotahist | null {
+  const l = removerQuebraLinha(linha);
+
+  if (l.length !== TAMANHO_REGISTRO) return null;
+  if (lerTipreg(l) !== TIPREG_COTACAO) return null;
+
+  return {
+    tipreg: TIPREG_COTACAO,
+    dataPregao: parseDataObrigatoria(campo(l, 3, 10), "DATAPREGAO"),
+    codBdi: campo(l, 11, 12).trim(),
+    codNeg: campo(l, 13, 24).trim(),
+    tpMerc: campo(l, 25, 27),
+    nomRes: campo(l, 28, 39).trim(),
+    preAbe: parseDecimal(campo(l, 57, 69), "PREABE", 2),
+    preMax: parseDecimal(campo(l, 70, 82), "PREMAX", 2),
+    preMin: parseDecimal(campo(l, 83, 95), "PREMIN", 2),
+    preMed: parseDecimal(campo(l, 96, 108), "PREMED", 2),
+    preUlt: parseDecimal(campo(l, 109, 121), "PREULT", 2),
+    preOfc: parseDecimal(campo(l, 122, 134), "PREOFC", 2),
+    preOfv: parseDecimal(campo(l, 135, 147), "PREOFV", 2),
+    totNeg: parseInteiro(campo(l, 148, 152), "TOTNEG"),
+    quaTot: parseInteiro(campo(l, 153, 170), "QUATOT"),
+    volTot: parseDecimal(campo(l, 171, 188), "VOLTOT", 2),
+    fatCot: parseInteiro(campo(l, 211, 217), "FATCOT"),
+    // PREEXE (189–201) e DATVEN (203–210) NÃO são lidos: em ação vêm zerados.
+  };
 }

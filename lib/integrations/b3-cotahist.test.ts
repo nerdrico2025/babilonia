@@ -363,6 +363,41 @@ describe("parseRegistroAcao — extração de ação à vista", () => {
     expect(parseRegistroAcao("curta")).toBeNull();
     expect(parseRegistroAcao("00" + " ".repeat(243))).toBeNull();
   });
+
+  /**
+   * REGRESSÃO da ingestão real de 2025: ação à vista de PAPEL LÍQUIDO tem QUATOT
+   * (qtd. de títulos) e VOLTOT (volume) GIGANTES — centenas de milhões / bilhões,
+   * preenchendo quase todos os 18 dígitos do campo. Os exemplos sintéticos usavam
+   * valores pequenos; este usa magnitudes REAIS (BPAC11) para garantir que o
+   * parser NÃO estoura (nem com `Number`/`toFixed`) e extrai ticker e fechamento.
+   */
+  it("parseia ação real de alto volume (BPAC11) sem lançar e extrai ticker/fechamento", () => {
+    const linha = montarRegistro01({
+      TIPREG: "01",
+      DATAPREGAO: "20250407",
+      CODBDI: "02",
+      CODNEG: "BPAC11",
+      TPMERC: "010",
+      NOMRES: "BTG PACTUAL",
+      PREULT: "0000000003456", // R$ 34,56 (fechamento)
+      PREOFC: "0000000003455",
+      PREOFV: "0000000003457",
+      TOTNEG: "45678",
+      QUATOT: "000000123456789012", // ~1,23e11 títulos (campo quase cheio)
+      VOLTOT: "000000098765432100", // R$ 987.654.321,00 de volume
+      FATCOT: "0000001",
+    });
+
+    expect(() => parseRegistroAcao(linha)).not.toThrow();
+
+    const reg = parseRegistroAcao(linha);
+    expect(reg).not.toBeNull();
+    if (!reg) return;
+    expect(reg.codNeg).toBe("BPAC11");
+    expect(reg.preUlt).toBe(34.56); // fechamento
+    expect(reg.quaTot).toBe(123456789012);
+    expect(reg.volTot).toBe(987654321); // 98765432100 / 100 (Dec=2)
+  });
 });
 
 describe("discriminadores opção vs ação — mutuamente exclusivos", () => {

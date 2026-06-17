@@ -164,8 +164,6 @@ function upsertFake() {
   };
 }
 
-const loggerMudo = { warn: () => {} };
-
 // ── processarLinhas ──────────────────────────────────────────────────────────
 
 describe("processarLinhas — roteamento opção vs ação num só stream", () => {
@@ -189,7 +187,6 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
       upsertOpcoes: fake.upsertOpcoes,
       upsertAcoes: fake.upsertAcoes,
       tamanhoLote: 2, // força mais de um lote nas opções
-      logger: loggerMudo,
     });
 
     expect(rel.linhasLidas).toBe(8);
@@ -228,7 +225,6 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
       resolverObjeto: () => null,
       upsertOpcoes: fake.upsertOpcoes,
       upsertAcoes: fake.upsertAcoes,
-      logger: loggerMudo,
     });
     expect(rel.erros).toBe(1);
     expect(rel.opcoesIngeridas).toBe(1);
@@ -243,13 +239,77 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
       resolverObjeto: () => null,
       upsertOpcoes: fake.upsertOpcoes,
       upsertAcoes: fake.upsertAcoes,
-      logger: loggerMudo,
     });
     expect(fake.lotesOpcoes).toEqual([]);
     expect(fake.lotesAcoes).toEqual([]);
     expect(rel.opcoesIngeridas).toBe(0);
     expect(rel.acoesIngeridas).toBe(0);
     expect(rel.linhasPuladas).toBe(3);
+  });
+
+  /**
+   * REGRESSÃO do bug "Maximum call stack size exceeded" na ingestão real de 2025.
+   * Um upsert que falha NÃO pode ser engolido como "linha ruim" nem deixar o lote
+   * crescer: antes, a falha era capturada pelo try/catch por-linha e o lote nunca
+   * era limpo, então ele crescia 500→501→502… a cada linha (flood de log) até o
+   * builder de SQL do Drizzle estourar a pilha com um INSERT gigante. O correto é
+   * o erro de upsert PROPAGAR (é sistêmico) — e o lote jamais passar do tamanho.
+   */
+  it("um upsert de ação que falha PROPAGA — não engole nem faz o lote crescer", async () => {
+    const tickers = Array.from({ length: 1200 }, (_, i) =>
+      montarRegistro01({
+        TIPREG: "01",
+        DATAPREGAO: "20250407",
+        CODBDI: "02",
+        CODNEG: "ACT" + i, // ticker distinto por linha
+        TPMERC: "010",
+        NOMRES: "X",
+        PREULT: reais13(34.56),
+        VOLTOT: "000000098765432100",
+        QUATOT: "000000123456789012",
+        FATCOT: "0000001",
+      }),
+    );
+
+    const lotesVistos: number[] = [];
+    await expect(
+      processarLinhas(tickers, {
+        resolverObjeto: () => null,
+        upsertOpcoes: async () => {},
+        upsertAcoes: async (regs) => {
+          lotesVistos.push(regs.length);
+          throw new Error("boom no banco");
+        },
+        tamanhoLote: 500,
+      }),
+    ).rejects.toThrow("boom no banco");
+
+    // O erro propagou no PRIMEIRO flush (500 itens); o lote NUNCA cresceu além do
+    // tamanho — sem runaway, sem INSERT gigante, sem estouro de pilha.
+    expect(lotesVistos).toEqual([500]);
+    expect(Math.max(...lotesVistos)).toBeLessThanOrEqual(500);
+  });
+
+  /**
+   * REGRESSÃO do log por-linha: as rejeições (parser lançando) são AGREGADAS por
+   * motivo com no máximo ~10 amostras — não uma linha de log por rejeição.
+   */
+  it("agrega rejeições por motivo com ≤ 10 amostras (sem log por-linha)", async () => {
+    const fake = upsertFake();
+    // 25 opções corrompidas (mesmo motivo: campo PREEXE) + 1 boa.
+    const corrompidas = Array.from({ length: 25 }, () => CALL_CORROMPIDA);
+    const rel = await processarLinhas([...corrompidas, PUT_VALE], {
+      resolverObjeto: () => null,
+      upsertOpcoes: fake.upsertOpcoes,
+      upsertAcoes: fake.upsertAcoes,
+    });
+
+    expect(rel.erros).toBe(25);
+    expect(rel.opcoesIngeridas).toBe(1);
+    const agg = rel.rejeicoes.get("campo PREEXE inválido");
+    expect(agg).toBeDefined();
+    expect(agg?.count).toBe(25); // conta TODAS
+    expect(agg?.amostras.length).toBe(10); // mas guarda só ~10 amostras
   });
 });
 
@@ -263,7 +323,6 @@ describe("registroParaUpsert — mapeamento de campos", () => {
       resolverObjeto: () => "PETR4",
       upsertOpcoes: fake.upsertOpcoes,
       upsertAcoes: fake.upsertAcoes,
-      logger: loggerMudo,
     });
     const r = fake.opcoes[0];
     expect(r).toBeDefined();

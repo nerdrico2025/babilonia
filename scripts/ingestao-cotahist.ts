@@ -39,6 +39,7 @@ import {
   isAcaoVistaLotePadrao,
   parseLinhaCotahist,
   parseRegistroAcao,
+  CotahistCampoInvalidoError,
 } from "@/lib/integrations/b3-cotahist";
 import type {
   RegistroCotahist,
@@ -50,6 +51,22 @@ import type { NewOpcaoCotahist, NewAcaoCotahist } from "@/db/schema";
 
 // ── Tipos do núcleo ──────────────────────────────────────────────────────────
 
+/**
+ * Máximo de TRECHOS de exemplo guardados POR motivo de rejeição. As rejeições são
+ * AGREGADAS por motivo (não logadas linha-a-linha): num arquivo anual, um
+ * deslocamento de byte rejeitaria centenas de milhares de linhas — logar cada uma
+ * trava a ingestão. Guardamos a CONTAGEM + estas poucas amostras para depurar.
+ */
+export const MAX_AMOSTRAS_POR_MOTIVO = 10;
+
+/** Rejeições de um mesmo motivo: quantas foram e até 10 trechos de exemplo. */
+export interface RejeicaoAgregada {
+  /** Quantas linhas foram rejeitadas por este motivo. */
+  count: number;
+  /** Até `MAX_AMOSTRAS_POR_MOTIVO` trechos (`linha N: "…"`) para depuração. */
+  amostras: string[];
+}
+
 /** Contagens reportadas ao fim da ingestão (§ "robustez" do prompt). */
 export interface RelatorioIngestao {
   /** Total de linhas lidas do arquivo (todas, incl. header/trailer). */
@@ -60,8 +77,14 @@ export interface RelatorioIngestao {
   acoesIngeridas: number;
   /** Linhas descartadas SEM erro: nem opção nem ação (header, trailer, frac…). */
   linhasPuladas: number;
-  /** Linhas que o parser REJEITOU por corrupção (lançou) — logadas, não fatais. */
+  /** Linhas que o parser REJEITOU por corrupção (lançou) — não fatais. */
   erros: number;
+  /**
+   * Rejeições AGREGADAS por motivo (chave = motivo legível, ex.:
+   * `"campo PREEXE inválido"`). Substitui o log por-linha — a impressão acontece
+   * só no resumo final do `main()`.
+   */
+  rejeicoes: Map<string, RejeicaoAgregada>;
 }
 
 /** Dependências injetadas no núcleo (tudo que toca o mundo externo). */
@@ -74,11 +97,32 @@ export interface OpcoesProcessamento {
   upsertAcoes: (registros: NewAcaoCotahist[]) => Promise<void>;
   /** Tamanho do lote de upsert (default 500). */
   tamanhoLote?: number;
-  /** Para avisos de linha corrompida (default `console`). */
-  logger?: Pick<Console, "warn">;
 }
 
 const TAMANHO_LOTE_PADRAO = 500;
+
+/** Trecho da linha (com nº) usado como amostra de rejeição — sem o log por-linha. */
+function trechoDaLinha(linha: string, numeroLinha: number): string {
+  return `linha ${numeroLinha}: "${linha.slice(0, 60)}"`;
+}
+
+/** Registra uma rejeição agregada por motivo (conta sempre; guarda ≤ 10 amostras). */
+function registrarRejeicao(
+  relatorio: RelatorioIngestao,
+  motivo: string,
+  amostra: string,
+): void {
+  relatorio.erros++;
+  let agg = relatorio.rejeicoes.get(motivo);
+  if (!agg) {
+    agg = { count: 0, amostras: [] };
+    relatorio.rejeicoes.set(motivo, agg);
+  }
+  agg.count++;
+  if (agg.amostras.length < MAX_AMOSTRAS_POR_MOTIVO) {
+    agg.amostras.push(amostra);
+  }
+}
 
 // ── Núcleo PURO (testável sem rede/disco/banco) ──────────────────────────────
 
@@ -108,13 +152,13 @@ export async function processarLinhas(
   opts: OpcoesProcessamento,
 ): Promise<RelatorioIngestao> {
   const tamanhoLote = opts.tamanhoLote ?? TAMANHO_LOTE_PADRAO;
-  const logger = opts.logger ?? console;
   const relatorio: RelatorioIngestao = {
     linhasLidas: 0,
     opcoesIngeridas: 0,
     acoesIngeridas: 0,
     linhasPuladas: 0,
     erros: 0,
+    rejeicoes: new Map(),
   };
 
   let loteOpcoes: NewOpcaoCotahist[] = [];
@@ -142,6 +186,17 @@ export async function processarLinhas(
       continue;
     }
 
+    // ⚠️ FRONTEIRA CRÍTICA: só o PARSE entra no try/catch por-linha. Parse é o
+    // único passo cuja falha é RECUPERÁVEL ("uma linha ruim" → conta e segue). O
+    // FLUSH (`descarregar*` → upsert) fica DE FORA: erro de upsert é SISTÊMICO e
+    // deve PROPAGAR (abortar o job). Misturá-los (versão antiga) tinha um bug
+    // grave: um flush que falhava era engolido como "linha ruim" E o lote não era
+    // limpo (a limpeza vinha depois do `await` que lançou), então o lote crescia
+    // a cada linha seguinte (500, 501, 502…) — floodando o log "linha após linha"
+    // e, ao passar de ~milhares de linhas, estourando a pilha do builder de SQL
+    // do Drizzle ("Maximum call stack size exceeded"), que mascarava o erro real.
+    let opcaoRow: NewOpcaoCotahist | null = null;
+    let acaoRow: NewAcaoCotahist | null = null;
     try {
       if (ehOpcao) {
         const reg: RegistroCotahist | null = parseLinhaCotahist(linha);
@@ -152,33 +207,44 @@ export async function processarLinhas(
         }
         // Opção sem vencimento é anômalo (a tabela exige `expiresAt`).
         if (reg.datVen === null) {
-          relatorio.erros++;
-          logger.warn(
-            `COTAHIST: opção ${reg.codNeg} sem DATVEN no pregão ${reg.dataPregao.toISOString()} — pulada`,
+          registrarRejeicao(
+            relatorio,
+            "opção sem DATVEN",
+            trechoDaLinha(linha, relatorio.linhasLidas),
           );
           continue;
         }
-        loteOpcoes.push(registroParaUpsert(reg, opts.resolverObjeto(reg.codNeg)));
-        relatorio.opcoesIngeridas++;
-        if (loteOpcoes.length >= tamanhoLote) await descarregarOpcoes();
+        opcaoRow = registroParaUpsert(reg, opts.resolverObjeto(reg.codNeg));
       } else {
         const reg: RegistroAcaoCotahist | null = parseRegistroAcao(linha);
         if (reg === null) {
           relatorio.linhasPuladas++;
           continue;
         }
-        loteAcoes.push(registroAcaoParaUpsert(reg));
-        relatorio.acoesIngeridas++;
-        if (loteAcoes.length >= tamanhoLote) await descarregarAcoes();
+        acaoRow = registroAcaoParaUpsert(reg);
       }
     } catch (erro) {
-      // Corrupção numa linha já roteada: loga e segue (não aborta o arquivo).
-      relatorio.erros++;
-      logger.warn(
-        `COTAHIST: linha ${relatorio.linhasLidas} rejeitada (${
-          erro instanceof Error ? erro.message : String(erro)
-        }); trecho="${linha.slice(0, 60)}"`,
-      );
+      // Corrupção/byte-shift numa linha já roteada: agrega por motivo e segue
+      // (não aborta o arquivo). Motivo = nome do campo p/ erros do parser.
+      const motivo =
+        erro instanceof CotahistCampoInvalidoError
+          ? `campo ${erro.campo} inválido`
+          : erro instanceof Error
+            ? erro.message
+            : String(erro);
+      registrarRejeicao(relatorio, motivo, trechoDaLinha(linha, relatorio.linhasLidas));
+      continue;
+    }
+
+    // Acúmulo + flush FORA do try: um upsert que falhar PROPAGA (ver acima).
+    if (opcaoRow) {
+      loteOpcoes.push(opcaoRow);
+      relatorio.opcoesIngeridas++;
+      if (loteOpcoes.length >= tamanhoLote) await descarregarOpcoes();
+    } else if (acaoRow) {
+      loteAcoes.push(acaoRow);
+      relatorio.acoesIngeridas++;
+      if (loteAcoes.length >= tamanhoLote) await descarregarAcoes();
     }
   }
 
@@ -491,7 +557,6 @@ async function main(): Promise<void> {
     resolverObjeto: (symbol) => derivarAtivoObjeto(symbol, mapaRaizes),
     upsertOpcoes: (registros) => upsertLote(db, registros),
     upsertAcoes: (registros) => upsertLoteAcoes(db, registros),
-    logger: console,
   });
 
   const seg = ((Date.now() - inicio) / 1000).toFixed(1);
@@ -503,6 +568,16 @@ async function main(): Promise<void> {
       `  linhas puladas ........ ${relatorio.linhasPuladas}\n` +
       `  erros (linhas ruins) .. ${relatorio.erros}`,
   );
+
+  // Resumo AGREGADO das rejeições (sem log por-linha): contagem por motivo +
+  // até MAX_AMOSTRAS_POR_MOTIVO trechos de exemplo de cada.
+  if (relatorio.rejeicoes.size > 0) {
+    console.error(`\nRejeições por motivo (amostras ≤ ${MAX_AMOSTRAS_POR_MOTIVO}):`);
+    for (const [motivo, agg] of relatorio.rejeicoes) {
+      console.error(`  • ${motivo}: ${agg.count}`);
+      for (const amostra of agg.amostras) console.error(`      ${amostra}`);
+    }
+  }
 }
 
 // Executa só quando rodado direto (não em import de teste).

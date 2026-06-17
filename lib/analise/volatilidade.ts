@@ -7,7 +7,7 @@
  * próximos" — exatamente o exemplo do enunciado.
  */
 
-/** Limiares de IV Rank (escala 0–100, como a OpLab entrega). */
+/** Limiares de IV Rank (escala 0–100, calculado por nós a partir do COTAHIST via Black-Scholes). */
 export const IV_RANK_ALTO = 70;
 export const IV_RANK_BAIXO = 30;
 

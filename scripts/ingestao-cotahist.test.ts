@@ -178,7 +178,7 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
       PUT_VALE, // opção → opcao_cotahist (underlying VALE3)
       LIXO_CURTO, // tamanho errado → pula
       CALL_CORROMPIDA, // opção corrompida → erro (loga e segue)
-      CALL_ABEV, // opção sem match na watchlist → ingere (underlying null)
+      CALL_ABEV, // opção FORA da watchlist (ABEV) → descarta (§6.4)
       TRAILER, // trailer → pula
     ];
 
@@ -190,21 +190,22 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
     });
 
     expect(rel.linhasLidas).toBe(8);
-    expect(rel.opcoesIngeridas).toBe(3); // call PETR, put VALE, call ABEV
+    expect(rel.opcoesIngeridas).toBe(2); // call PETR, put VALE (ABEV é descartada)
+    expect(rel.opcoesForaWatchlist).toBe(1); // ABEV não está na watchlist
     expect(rel.acoesIngeridas).toBe(1); // PETR4 à vista
     expect(rel.linhasPuladas).toBe(3); // header, lixo, trailer
     expect(rel.erros).toBe(1); // call corrompida
 
-    // Opções foram para o upsert de opções, com os vínculos corretos.
-    expect(fake.opcoes).toHaveLength(3);
+    // Só as opções DA WATCHLIST foram para o upsert, com os vínculos corretos.
+    expect(fake.opcoes).toHaveLength(2);
     const porTicker = new Map(fake.opcoes.map((r) => [r.optionSymbol, r]));
     expect(porTicker.get("PETRF336")?.kind).toBe("call");
     expect(porTicker.get("PETRF336")?.underlying).toBe("PETR4");
     expect(porTicker.get("PETRF336")?.strike).toBe("33.00");
     expect(porTicker.get("VALER450")?.kind).toBe("put");
     expect(porTicker.get("VALER450")?.underlying).toBe("VALE3");
-    expect(porTicker.get("ABEVA120")?.underlying).toBeNull();
-    expect(fake.lotesOpcoes).toEqual([2, 1]); // 3 opções, lote 2
+    expect(porTicker.has("ABEVA120")).toBe(false); // descartada, não armazenada
+    expect(fake.lotesOpcoes).toEqual([2]); // 2 opções, lote 2 → um flush só
 
     // Ação foi para o upsert de ações — e SEM strike/vencimento/kind (a row de
     // ação nem tem esses campos).
@@ -222,7 +223,7 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
   it("uma linha corrompida NÃO aborta o arquivo (as demais ingressam)", async () => {
     const fake = upsertFake();
     const rel = await processarLinhas([CALL_CORROMPIDA, PUT_VALE, ACAO_PETR4], {
-      resolverObjeto: () => null,
+      resolverObjeto: () => "VALE3", // dentro da watchlist → ingere
       upsertOpcoes: fake.upsertOpcoes,
       upsertAcoes: fake.upsertAcoes,
     });
@@ -299,7 +300,7 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
     // 25 opções corrompidas (mesmo motivo: campo PREEXE) + 1 boa.
     const corrompidas = Array.from({ length: 25 }, () => CALL_CORROMPIDA);
     const rel = await processarLinhas([...corrompidas, PUT_VALE], {
-      resolverObjeto: () => null,
+      resolverObjeto: () => "VALE3", // a opção boa está na watchlist
       upsertOpcoes: fake.upsertOpcoes,
       upsertAcoes: fake.upsertAcoes,
     });
@@ -310,6 +311,41 @@ describe("processarLinhas — roteamento opção vs ação num só stream", () =
     expect(agg).toBeDefined();
     expect(agg?.count).toBe(25); // conta TODAS
     expect(agg?.amostras.length).toBe(10); // mas guarda só ~10 amostras
+  });
+
+  /**
+   * §6.4 / decisão de storage: só armazenamos opções da WATCHLIST. Opção cujo
+   * ativo-objeto não resolve (raiz fora da watchlist) é DESCARTADA — é o que
+   * impede ingerir a B3 inteira (~2M linhas) e estourar o tier do Postgres.
+   */
+  it("descarta opção fora da watchlist (não vai ao upsert) e a conta à parte", async () => {
+    const mapa = construirMapaRaizes(["PETR4"]); // só PETR na watchlist
+    const fake = upsertFake();
+    const rel = await processarLinhas([CALL_PETR, PUT_VALE, CALL_ABEV], {
+      resolverObjeto: (s) => derivarAtivoObjeto(s, mapa),
+      upsertOpcoes: fake.upsertOpcoes,
+      upsertAcoes: fake.upsertAcoes,
+    });
+
+    expect(rel.opcoesIngeridas).toBe(1); // só a call de PETR
+    expect(rel.opcoesForaWatchlist).toBe(2); // VALE e ABEV fora → descartadas
+    expect(rel.erros).toBe(0); // descartar NÃO é erro
+    expect(fake.opcoes.map((r) => r.optionSymbol)).toEqual(["PETRF336"]);
+  });
+
+  it("watchlist vazia → nenhuma opção ingerida (todas fora), mas ações entram", async () => {
+    const mapa = construirMapaRaizes([]); // watchlist vazia
+    const fake = upsertFake();
+    const rel = await processarLinhas([CALL_PETR, PUT_VALE, ACAO_PETR4], {
+      resolverObjeto: (s) => derivarAtivoObjeto(s, mapa),
+      upsertOpcoes: fake.upsertOpcoes,
+      upsertAcoes: fake.upsertAcoes,
+    });
+
+    expect(rel.opcoesIngeridas).toBe(0);
+    expect(rel.opcoesForaWatchlist).toBe(2);
+    expect(rel.acoesIngeridas).toBe(1); // ações independem da watchlist
+    expect(fake.lotesOpcoes).toEqual([]); // nenhum flush de opções
   });
 });
 

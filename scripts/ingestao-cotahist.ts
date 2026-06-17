@@ -71,8 +71,15 @@ export interface RejeicaoAgregada {
 export interface RelatorioIngestao {
   /** Total de linhas lidas do arquivo (todas, incl. header/trailer). */
   linhasLidas: number;
-  /** Opções (070/080) parseadas com sucesso e enviadas ao upsert. */
+  /** Opções (070/080) cujo ativo-objeto está na watchlist e foram ao upsert. */
   opcoesIngeridas: number;
+  /**
+   * Opções válidas DESCARTADAS por terem ativo-objeto FORA da watchlist (§6.4:
+   * vínculo restrito à watchlist no MVP — não armazenamos a B3 inteira). Contado
+   * à parte de `linhasPuladas` porque é esperado e costuma ser ALTO; se vier
+   * gigante e `opcoesIngeridas` = 0, a watchlist provavelmente está vazia.
+   */
+  opcoesForaWatchlist: number;
   /** Ações à vista lote-padrão (010 + 02) enviadas ao upsert. */
   acoesIngeridas: number;
   /** Linhas descartadas SEM erro: nem opção nem ação (header, trailer, frac…). */
@@ -136,6 +143,9 @@ function registrarRejeicao(
  * Política de robustez (decisão documentada — prompt §5):
  *  - linha que não é opção NEM ação à vista lote-padrão → PULA (header `00`,
  *    trailer `99`, fracionário, direitos…). Conta em `linhasPuladas`.
+ *  - opção cujo ativo-objeto NÃO está na watchlist (`resolverObjeto` → `null`) →
+ *    DESCARTA (§6.4: não armazenamos a B3 inteira, só o vínculo da watchlist).
+ *    Conta em `opcoesForaWatchlist`. É o que mantém o `opcao_cotahist` enxuto.
  *  - parser LANÇA (`CotahistCampoInvalidoError`) → corrupção/byte-shift numa
  *    linha já roteada: LOGA o trecho e CONTINUA (não aborta o arquivo por uma
  *    linha ruim); conta em `erros`.
@@ -155,6 +165,7 @@ export async function processarLinhas(
   const relatorio: RelatorioIngestao = {
     linhasLidas: 0,
     opcoesIngeridas: 0,
+    opcoesForaWatchlist: 0,
     acoesIngeridas: 0,
     linhasPuladas: 0,
     erros: 0,
@@ -214,7 +225,15 @@ export async function processarLinhas(
           );
           continue;
         }
-        opcaoRow = registroParaUpsert(reg, opts.resolverObjeto(reg.codNeg));
+        // §6.4: só armazenamos opções da WATCHLIST. Sem ativo-objeto resolvido
+        // (raiz fora da watchlist), descarta — é o que evita ingerir a B3 inteira
+        // (~2M linhas/473 MB) e estourar o tier do Postgres.
+        const underlying = opts.resolverObjeto(reg.codNeg);
+        if (underlying === null) {
+          relatorio.opcoesForaWatchlist++;
+          continue;
+        }
+        opcaoRow = registroParaUpsert(reg, underlying);
       } else {
         const reg: RegistroAcaoCotahist | null = parseRegistroAcao(linha);
         if (reg === null) {
@@ -551,6 +570,15 @@ async function main(): Promise<void> {
   console.error(
     `Watchlist: ${objetos.length} ativo(s); ${mapaRaizes.size} raiz(es) sem ambiguidade.`,
   );
+  if (mapaRaizes.size === 0) {
+    // Sem watchlist, o filtro §6.4 descarta TODAS as opções → opcao_cotahist
+    // não recebe nada. Avisa alto em vez de "ingerir zero" silenciosamente.
+    console.error(
+      "⚠️  Watchlist VAZIA (ou só raízes ambíguas): NENHUMA opção será armazenada\n" +
+        "    (§6.4: só ingerimos opções de ativos na watchlist). Popule a watchlist\n" +
+        "    e rode de novo. As ações à vista são ingeridas normalmente.",
+    );
+  }
 
   const inicio = Date.now();
   const relatorio = await processarLinhas(abrirFonte(arg), {
@@ -562,11 +590,12 @@ async function main(): Promise<void> {
   const seg = ((Date.now() - inicio) / 1000).toFixed(1);
   console.error(
     `\nIngestão concluída em ${seg}s:\n` +
-      `  linhas lidas .......... ${relatorio.linhasLidas}\n` +
-      `  opções ingeridas ...... ${relatorio.opcoesIngeridas}\n` +
-      `  ações ingeridas ....... ${relatorio.acoesIngeridas}\n` +
-      `  linhas puladas ........ ${relatorio.linhasPuladas}\n` +
-      `  erros (linhas ruins) .. ${relatorio.erros}`,
+      `  linhas lidas .............. ${relatorio.linhasLidas}\n` +
+      `  opções ingeridas .......... ${relatorio.opcoesIngeridas}\n` +
+      `  opções fora da watchlist .. ${relatorio.opcoesForaWatchlist}\n` +
+      `  ações ingeridas ........... ${relatorio.acoesIngeridas}\n` +
+      `  linhas puladas ............ ${relatorio.linhasPuladas}\n` +
+      `  erros (linhas ruins) ...... ${relatorio.erros}`,
   );
 
   // Resumo AGREGADO das rejeições (sem log por-linha): contagem por motivo +

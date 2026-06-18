@@ -10,7 +10,7 @@ import type {
   BrapiFundamentos,
   BrapiProvento,
 } from "@/lib/integrations/brapi";
-import type { CadeiaOpcoes, VolatilidadeAtivo } from "@/lib/integrations/oplab";
+import type { CadeiaOpcoes, VolatilidadeAtivo } from "@/lib/opcoes/tipos";
 
 /** Metadado de frescor (§6.3), espelhando `Frescor` do Route Handler. */
 export interface Frescor {

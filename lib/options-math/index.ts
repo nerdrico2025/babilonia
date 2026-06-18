@@ -28,8 +28,10 @@
 
 // ── Tipos base ───────────────────────────────────────────────────────────────
 
-/** Tipo da opção. */
-export type TipoOpcao = "call" | "put";
+// `TipoOpcao` mora no módulo de tipos NEUTRO (fonte de verdade única, §5.1) e é
+// reexportado aqui para o núcleo e seus consumidores (`@/lib/options-math`).
+import type { TipoOpcao } from "@/lib/opcoes/tipos";
+export type { TipoOpcao };
 
 /** Lado da operação na perna. */
 export type LadoOperacao = "compra" | "venda";

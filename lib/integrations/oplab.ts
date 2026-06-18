@@ -26,6 +26,17 @@ import type { OpcoesBusca, ResultadoIntegracao } from "./cache";
 export { IntegracaoIndisponivelError } from "./cache";
 export type { OpcoesBusca, ResultadoIntegracao } from "./cache";
 
+// Tipos de domínio (cadeia/gregas/volatilidade) vêm do módulo NEUTRO (§5.1):
+// esta camada normaliza a resposta da OpLab PARA esses tipos, sem defini-los.
+import type {
+  TipoOpcao,
+  OpcaoCadeia,
+  CadeiaOpcoes,
+  VolatilidadeAtivo,
+  GregasOpcao,
+  ParamsGregas,
+} from "@/lib/opcoes/tipos";
+
 const BASE_URL = "https://api.oplab.com.br/v3";
 
 // ── TTL por tipo de dado (§6.2/§6.3) ─────────────────────────────────────────
@@ -60,92 +71,9 @@ export class OplabErroResposta extends Error {
   }
 }
 
-// ── Tipos de domínio (normalizados, JSON-safe p/ cache) ──────────────────────
-
-/** Tipo da opção normalizado para o domínio (CALL/PUT → call/put). */
-export type TipoOpcao = "call" | "put";
-
-/**
- * Uma opção da cadeia. SEM gregas/IV (vêm da calculadora BS) e SEM open
- * interest (não existe na OpLab — §6.4). Expõe os proxies de liquidez.
- */
-export interface OpcaoCadeia {
-  /** Ticker exato da opção (ex.: "PETRK221"). */
-  symbol: string;
-  tipo: TipoOpcao;
-  strike: number;
-  /** Vencimento (data ISO), como veio da fonte. */
-  vencimento: string;
-  /** AMERICAN/EUROPEAN, ou null. */
-  tipoExercicio: string | null;
-  tamanhoContrato: number | null;
-  bid: number | null;
-  ask: number | null;
-  /** Spread ask − bid (≥ 0), proxy de liquidez (§8.3); null se faltar bid/ask. */
-  spread: number | null;
-  volume: number | null;
-  volumeFinanceiro: number | null;
-  bidVolume: number | null;
-  askVolume: number | null;
-  negocios: number | null;
-  marketMaker: boolean | null;
-}
-
-/** Um vencimento da cadeia, com a grade de strikes (call/put lado a lado). */
-export interface SerieVencimento {
-  vencimento: string;
-  diasAteVencimento: number | null;
-  strikes: { strike: number; call: OpcaoCadeia | null; put: OpcaoCadeia | null }[];
-}
-
-/** Cadeia de opções estruturada de um ativo-objeto (§6.2). */
-export interface CadeiaOpcoes {
-  ativo: string;
-  /** Preço do ativo-objeto (close/spot), ou null. */
-  precoAtivo: number | null;
-  /** IV atual do ATIVO (iv_current). IV por opção não vem aqui (§6.4 #3). */
-  ivAtual: number | null;
-  vencimentos: SerieVencimento[];
-  /** Sempre `false`: a OpLab não fornece open interest (§6.4 #1). */
-  openInterestDisponivel: false;
-  /** Sempre `false`: gregas não vêm na cadeia; use `getGregas` (§6.4 #2). */
-  gregasNaCadeia: false;
-  /** Explicação da liquidez sem OI (volume + spread + market maker). */
-  notaLiquidez: string;
-}
-
-/** Volatilidade do ATIVO-OBJETO — é onde mora o IV Rank (§6.4 #3). */
-export interface VolatilidadeAtivo {
-  ativo: string;
-  ivAtual: number | null;
-  ivRank1a: number | null;
-  ivPercentil1a: number | null;
-  ivRank6m: number | null;
-  ivPercentil6m: number | null;
-  ewmaAtual: number | null;
-  /** Sempre `false`: IV Rank existe só no ativo, nunca por contrato (§6.4 #3). */
-  ivRankPorContratoDisponivel: false;
-}
-
-/** Gregas + IV por opção, vindas da calculadora BS (`/market/options/bs`). */
-export interface GregasOpcao {
-  symbol: string;
-  moneyness: string | null;
-  /** Preço teórico Black-Scholes. */
-  precoTeorico: number | null;
-  delta: number | null;
-  gamma: number | null;
-  vega: number | null;
-  theta: number | null;
-  rho: number | null;
-  /** Volatilidade implícita da opção (campo `volatility`). */
-  iv: number | null;
-  /** Probabilidade de exercício (%). */
-  probExercicio: number | null;
-  spotPrice: number | null;
-  strike: number | null;
-  margem: number | null;
-}
+// ── Tipos de domínio ─────────────────────────────────────────────────────────
+// As definições de cadeia/gregas/volatilidade moram em `@/lib/opcoes/tipos`
+// (módulo neutro, importado acima). Aqui ficam só os tipos EXCLUSIVOS da OpLab.
 
 /** Taxa de juros (SELIC/CETIP) — insumo de `irate` para as gregas BS. */
 export interface TaxaJuros {
@@ -350,22 +278,6 @@ async function buscarVolatilidade(
     ewmaAtual: v.ewma_current ?? null,
     ivRankPorContratoDisponivel: false,
   };
-}
-
-/** Parâmetros da calculadora BS (§6.4 #2). `irate` é a SELIC. */
-export interface ParamsGregas {
-  /** Ticker exato da opção. */
-  symbol: string;
-  /** Taxa de juros (%) — SELIC, de `getTaxasJuros`. */
-  irate: number;
-  /** Volatilidade (%) usada no cálculo. */
-  vol?: number;
-  spotprice?: number;
-  strike?: number;
-  premium?: number;
-  /** Dias para o vencimento. */
-  dtm?: number;
-  tipo?: TipoOpcao;
 }
 
 async function buscarGregas(

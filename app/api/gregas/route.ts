@@ -14,7 +14,8 @@
  */
 import { z } from "zod";
 
-import { getGregas, type ParamsGregas } from "@/lib/integrations/oplab";
+import { getGregas } from "@/lib/integrations/oplab";
+import type { ParamsGregas } from "@/lib/opcoes/tipos";
 
 import {
   erroIntegracao,

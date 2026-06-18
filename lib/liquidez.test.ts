@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { avaliarLiquidez, precoReferencia, LIQUIDEZ_LIMITES } from "./liquidez";
-import type { OpcaoCadeia } from "@/lib/integrations/oplab";
+import type { OpcaoCadeia } from "@/lib/opcoes/tipos";
 
 // Cria uma opção da cadeia com os campos relevantes (resto neutro).
 function op(over: Partial<OpcaoCadeia>): OpcaoCadeia {

@@ -39,7 +39,7 @@ import type {
   OpcaoCadeia,
   TipoOpcao,
   VolatilidadeAtivo,
-} from "@/lib/integrations/oplab";
+} from "@/lib/opcoes/tipos";
 import { cn } from "@/lib/utils";
 
 // Metadado de frescor do dado (§6.3) — espelha `Frescor` do Route Handler.

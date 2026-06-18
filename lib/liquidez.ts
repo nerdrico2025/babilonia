@@ -12,7 +12,7 @@
  * §15) — documentadas aqui para ficarem explícitas, não escondidas no código.
  */
 
-import type { OpcaoCadeia } from "@/lib/integrations/oplab";
+import type { OpcaoCadeia } from "@/lib/opcoes/tipos";
 
 /** Limites do filtro de liquidez (MVP — ajustáveis). */
 export const LIQUIDEZ_LIMITES = {

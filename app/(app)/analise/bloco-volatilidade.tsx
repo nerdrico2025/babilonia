@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { lerSkew, lerVolatilidade } from "@/lib/analise/volatilidade";
-import type { VolatilidadeAtivo } from "@/lib/integrations/oplab";
+import type { VolatilidadeAtivo } from "@/lib/opcoes/tipos";
 
 import { FrescorBadge, Indicador, LeituraIniciante } from "./analise-ui";
 import type { Frescor } from "./tipos";

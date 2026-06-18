@@ -3,11 +3,14 @@ import { describe, it, expect } from "vitest";
 import {
   getMetaSelic,
   taxaContinua,
+  buscarSerieMetaSelic,
+  criarResolvedorSelic,
   TTL_SEGUNDOS,
   SERIE_META_SELIC,
   BcbSgsIndisponivelError,
   type CacheStore,
   type RegistroCache,
+  type PontoSelic,
 } from "@/lib/integrations/bcb-sgs";
 
 /**
@@ -154,5 +157,55 @@ describe("getMetaSelic — parse, conversão e cache", () => {
     await expect(
       getMetaSelic({ store, fetchImpl: falha.fetchImpl, agora: T0 }),
     ).rejects.toBeInstanceOf(BcbSgsIndisponivelError);
+  });
+});
+
+// ── Série histórica + resolvedor data→taxa (base do backfill de IV) ──────────
+
+describe("buscarSerieMetaSelic — série no intervalo (DD/MM/AAAA → Date)", () => {
+  it("parseia, calcula r contínua e ordena por data", async () => {
+    const corpo = [
+      { data: "19/03/2025", valor: "14.25" },
+      { data: "29/01/2025", valor: "13.25" }, // fora de ordem de propósito
+    ];
+    const f = fakeFetch(() => ok(corpo));
+    const serie = await buscarSerieMetaSelic(
+      new Date(Date.UTC(2025, 0, 1)),
+      new Date(Date.UTC(2025, 5, 30)),
+      { fetchImpl: f.fetchImpl },
+    );
+
+    expect(serie).toHaveLength(2);
+    // Ordenada por data crescente.
+    expect(serie[0]!.data.getTime()).toBe(Date.UTC(2025, 0, 29));
+    expect(serie[1]!.data.getTime()).toBe(Date.UTC(2025, 2, 19));
+    expect(serie[0]!.selicAnual).toBe(13.25);
+    expect(serie[1]!.rContinua).toBeCloseTo(Math.log(1.1425), 12);
+    // URL com endpoint de intervalo (dataInicial/dataFinal).
+    expect(f.ultimaUrl).toContain(`bcdata.sgs.${SERIE_META_SELIC}/dados?`);
+    expect(f.ultimaUrl).toContain("dataInicial=01/01/2025");
+    expect(f.ultimaUrl).toContain("dataFinal=30/06/2025");
+  });
+});
+
+describe("criarResolvedorSelic — passo-a-passo data→taxa contínua", () => {
+  const serie: PontoSelic[] = [
+    { data: new Date(Date.UTC(2025, 0, 29)), selicAnual: 13.25, rContinua: taxaContinua(13.25) },
+    { data: new Date(Date.UTC(2025, 2, 19)), selicAnual: 14.25, rContinua: taxaContinua(14.25) },
+    { data: new Date(Date.UTC(2025, 4, 7)), selicAnual: 14.75, rContinua: taxaContinua(14.75) },
+  ];
+  const resolver = criarResolvedorSelic(serie);
+
+  it("vale a última vigência com data ≤ pregão", () => {
+    // Entre 19/03 e 07/05 → vale 14,25%.
+    expect(resolver(new Date(Date.UTC(2025, 3, 10)))).toBeCloseTo(taxaContinua(14.25), 12);
+    // No dia exato da mudança (07/05) → já vale a nova (14,75%).
+    expect(resolver(new Date(Date.UTC(2025, 4, 7)))).toBeCloseTo(taxaContinua(14.75), 12);
+    // Depois de tudo → última (14,75%).
+    expect(resolver(new Date(Date.UTC(2025, 11, 31)))).toBeCloseTo(taxaContinua(14.75), 12);
+  });
+
+  it("pregão anterior ao 1º ponto → null (não inventa taxa)", () => {
+    expect(resolver(new Date(Date.UTC(2025, 0, 1)))).toBeNull();
   });
 });

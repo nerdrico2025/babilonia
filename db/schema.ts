@@ -311,6 +311,58 @@ export const acaoCotahist = pgTable(
   ],
 );
 
+// ── iv_history (IV representativa diária por ativo-objeto) ───────────────────
+// Uma linha por (ativo, pregão): a VOLATILIDADE IMPLÍCITA representativa do
+// ativo-objeto naquele dia (§6.4), CALCULADA por nós (não vem pronta) a partir
+// da opção ATM do vencimento mais próximo com liquidez — ver
+// `lib/options-math/iv-representativa.ts` e o orquestrador `scripts/calcular-iv.ts`.
+//
+// É a base do IV Rank/Percentil (vem depois): o Rank precisa da série histórica
+// de IV diária. Por isso guardamos também os CAMPOS DE AUDITORIA (qual série,
+// vencimento, spot e taxa originaram o número) — todo valor tem de ser conferível.
+//
+// Dias sem vencimento válido (>7 dias) ou sem série líquida com IV viável NÃO
+// geram linha (gap) — nunca gravamos "lixo"/IV inventada (§2.4).
+export const ivHistory = pgTable(
+  "iv_history",
+  {
+    id: serial("id").primaryKey(),
+    /** Ativo-objeto (symbol da watchlist, ex.: "PETR4"). */
+    ativo: text("ativo").notNull(),
+    /** Pregão (fechamento) a que esta IV se refere. */
+    tradeDate: timestamp("trade_date", { withTimezone: true }).notNull(),
+    /** IV anualizada em DECIMAL (0.35 = 35% a.a.). Precisão de gregas/IV (§7). */
+    iv: metric("iv").notNull(),
+
+    // ── Auditoria: de onde veio cada número (obrigatório, conferível) ──────────
+    /** Vencimento da opção usada (o "mais próximo > 7 dias"). */
+    vencimentoUsado: timestamp("vencimento_usado", {
+      withTimezone: true,
+    }).notNull(),
+    /** option_symbol da série ATM escolhida (a que produziu a IV). */
+    opcaoUsada: text("opcao_usada").notNull(),
+    /** Tipo da série usada (call/put). */
+    tipoUsado: optionKind("tipo_usado").notNull(),
+    /** Spot do ativo no pregão (preco_fechamento de acao_cotahist), BRL. */
+    spotUsado: brl("spot_usado").notNull(),
+    /** Taxa livre de risco CONTÍNUA usada (Selic do pregão; ln(1+Selic)). */
+    rUsado: metric("r_usado").notNull(),
+    /** Tempo até o vencimento em ANOS usado no Black-Scholes (dias corridos/365). */
+    tAnos: metric("t_anos").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Uma IV representativa por ativo por pregão (idempotente ao re-rodar).
+    uniqueIndex("iv_history_ativo_data_uq").on(t.ativo, t.tradeDate),
+  ],
+);
+
 // ── api_cache ────────────────────────────────────────────────────────────────
 // Cache genérico das integrações (brapi/OpLab) com TTL (§6.3). A camada de
 // integração grava aqui o payload JSON e a data de expiração.
@@ -364,5 +416,7 @@ export type OpcaoCotahist = typeof opcaoCotahist.$inferSelect;
 export type NewOpcaoCotahist = typeof opcaoCotahist.$inferInsert;
 export type AcaoCotahist = typeof acaoCotahist.$inferSelect;
 export type NewAcaoCotahist = typeof acaoCotahist.$inferInsert;
+export type IvHistory = typeof ivHistory.$inferSelect;
+export type NewIvHistory = typeof ivHistory.$inferInsert;
 export type ApiCache = typeof apiCache.$inferSelect;
 export type NewApiCache = typeof apiCache.$inferInsert;

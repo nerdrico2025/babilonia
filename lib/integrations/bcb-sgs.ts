@@ -173,3 +173,90 @@ export function getMetaSelic(
     forcar: opcoes.forcar ?? false,
   });
 }
+
+// ── Série HISTÓRICA da Selic (para o backfill de IV por pregão) ──────────────
+//
+// O `getMetaSelic` traz só o valor MAIS RECENTE — serve para precificar hoje. O
+// backfill de IV histórica (iv_history) precisa do `r` de CADA pregão passado,
+// e a Meta Selic muda em reunião do Copom (~8x/ano). Por isso buscamos a SÉRIE
+// no intervalo e montamos um resolvedor data→taxa (passo-a-passo: vale a última
+// meta com data ≤ pregão). Sem cache aqui: é um job batch, rodado raramente.
+
+/** Um ponto da série da Meta Selic já normalizado (data + % a.a. + contínua). */
+export interface PontoSelic {
+  /** Data de vigência (UTC, meia-noite). */
+  data: Date;
+  /** Meta Selic em % a.a. (como a série 432). */
+  selicAnual: number;
+  /** Taxa contínua equivalente (`ln(1 + selic/100)`) — o `r` do Black-Scholes. */
+  rContinua: number;
+}
+
+/** `DD/MM/AAAA` (formato do SGS) → `Date` UTC à meia-noite. */
+function parseDataSgs(s: string): Date {
+  const [dia, mes, ano] = s.split("/").map(Number) as [number, number, number];
+  return new Date(Date.UTC(ano, mes - 1, dia));
+}
+
+/** `Date` → `DD/MM/AAAA` (parâmetro de consulta do SGS). */
+function formatDataSgs(d: Date): string {
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getUTCFullYear()}`;
+}
+
+/**
+ * Busca a SÉRIE da Meta Selic (432) entre duas datas, ordenada por data. Lança
+ * `BcbSgsErroResposta` em erro de status / resposta inválida. Sem cache (job batch).
+ */
+export async function buscarSerieMetaSelic(
+  dataInicial: Date,
+  dataFinal: Date,
+  opcoes: { fetchImpl?: typeof fetch } = {},
+): Promise<PontoSelic[]> {
+  const fetchImpl = opcoes.fetchImpl ?? globalThis.fetch;
+  const url =
+    `${BASE_URL}/bcdata.sgs.${SERIE_META_SELIC}/dados?formato=json` +
+    `&dataInicial=${formatDataSgs(dataInicial)}&dataFinal=${formatDataSgs(dataFinal)}`;
+
+  const resp = await fetchImpl(url, { headers: { Accept: "application/json" } });
+  if (!resp.ok) throw new BcbSgsErroResposta(resp.status);
+
+  const json: unknown = await resp.json().catch(() => null);
+  const serie = respostaSchema.parse(json);
+
+  return serie
+    .map((item) => {
+      const selicAnual = parsearValor(item.valor);
+      return {
+        data: parseDataSgs(item.data),
+        selicAnual,
+        rContinua: taxaContinua(selicAnual),
+      };
+    })
+    .sort((a, b) => a.data.getTime() - b.data.getTime());
+}
+
+/**
+ * Monta um resolvedor PURO data→taxa contínua a partir da série: para um pregão,
+ * devolve a `rContinua` da última vigência com `data ≤ pregão` (a Meta Selic é
+ * constante entre reuniões do Copom). Devolve `null` se o pregão é ANTERIOR ao
+ * primeiro ponto da série (não inventa taxa — §2.4). Testável sem rede.
+ */
+export function criarResolvedorSelic(
+  serie: readonly PontoSelic[],
+): (pregao: Date) => number | null {
+  // Cópia ordenada por data crescente (não confia na ordem da entrada).
+  const ordenada = [...serie].sort(
+    (a, b) => a.data.getTime() - b.data.getTime(),
+  );
+  return (pregao: Date): number | null => {
+    const t = pregao.getTime();
+    let escolhido: number | null = null;
+    for (const ponto of ordenada) {
+      if (ponto.data.getTime() <= t) escolhido = ponto.rContinua;
+      else break; // ordenada → o resto é posterior ao pregão
+    }
+    return escolhido;
+  };
+}

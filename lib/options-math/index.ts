@@ -347,3 +347,6 @@ export * from "./estruturas";
 
 // Motor Black-Scholes: pricing, volatilidade implícita e gregas (§18.1).
 export * from "./black-scholes";
+
+// IV representativa diária por ativo-objeto (§6.4) — base do IV Rank.
+export * from "./iv-representativa";

@@ -350,3 +350,6 @@ export * from "./black-scholes";
 
 // IV representativa diária por ativo-objeto (§6.4) — base do IV Rank.
 export * from "./iv-representativa";
+
+// IV Rank / IV Percentil sobre a série de IV (§8.2, §9) — "opção cara vs. barata".
+export * from "./iv-rank";

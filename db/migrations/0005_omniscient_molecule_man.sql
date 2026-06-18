@@ -1,0 +1,1 @@
+ALTER TABLE "iv_history" ADD COLUMN "premio_usado" numeric(16, 2) NOT NULL;

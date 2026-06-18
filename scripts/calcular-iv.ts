@@ -71,6 +71,7 @@ function paraUpsert(
     opcaoUsada: string;
     tipoUsado: "call" | "put";
     spotUsado: number;
+    premioUsado: number;
     rUsado: number;
     tAnos: number;
   },
@@ -83,6 +84,7 @@ function paraUpsert(
     opcaoUsada: res.opcaoUsada,
     tipoUsado: res.tipoUsado,
     spotUsado: res.spotUsado.toFixed(2),
+    premioUsado: res.premioUsado.toFixed(2),
     rUsado: res.rUsado.toFixed(6),
     tAnos: res.tAnos.toFixed(6),
   };
@@ -104,6 +106,7 @@ async function upsertLote(
         opcaoUsada: sql`excluded.opcao_usada`,
         tipoUsado: sql`excluded.tipo_usado`,
         spotUsado: sql`excluded.spot_usado`,
+        premioUsado: sql`excluded.premio_usado`,
         rUsado: sql`excluded.r_usado`,
         tAnos: sql`excluded.t_anos`,
         updatedAt: new Date(),
@@ -191,7 +194,8 @@ async function main(): Promise<void> {
         optionSymbol: opcaoCotahist.optionSymbol,
         kind: opcaoCotahist.kind,
         strike: opcaoCotahist.strike,
-        premio: opcaoCotahist.precoFechamento,
+        bid: opcaoCotahist.bid,
+        ask: opcaoCotahist.ask,
         vencimento: opcaoCotahist.expiresAt,
         tradeDate: opcaoCotahist.tradeDate,
         volumeFinanceiro: opcaoCotahist.volumeFinanceiro,
@@ -210,7 +214,8 @@ async function main(): Promise<void> {
         optionSymbol: o.optionSymbol,
         tipo: o.kind,
         strike: Number(o.strike),
-        premio: Number(o.premio),
+        bid: Number(o.bid),
+        ask: Number(o.ask),
         vencimento: o.vencimento,
         volumeFinanceiro: Number(o.volumeFinanceiro),
         numeroNegocios: o.numeroNegocios,

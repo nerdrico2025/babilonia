@@ -345,6 +345,8 @@ export const ivHistory = pgTable(
     tipoUsado: optionKind("tipo_usado").notNull(),
     /** Spot do ativo no pregão (preco_fechamento de acao_cotahist), BRL. */
     spotUsado: brl("spot_usado").notNull(),
+    /** Prêmio usado no solver = MID (bid+ask)/2 da série escolhida, BRL/ação. */
+    premioUsado: brl("premio_usado").notNull(),
     /** Taxa livre de risco CONTÍNUA usada (Selic do pregão; ln(1+Selic)). */
     rUsado: metric("r_usado").notNull(),
     /** Tempo até o vencimento em ANOS usado no Black-Scholes (dias corridos/365). */

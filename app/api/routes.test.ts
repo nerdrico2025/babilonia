@@ -20,15 +20,20 @@ vi.mock("@/lib/integrations/brapi", () => ({
   getCalendarioResultados: vi.fn(),
 }));
 
+// /api/gregas ainda usa a OpLab (trocada no passo 4.5); /api/cadeia já não.
 vi.mock("@/lib/integrations/oplab", () => ({
-  getCadeiaOpcoes: vi.fn(),
-  getVolatilidadeAtivo: vi.fn(),
   getGregas: vi.fn(),
 }));
+
+// Camada de dados própria (COTAHIST) que a /api/cadeia passou a consumir (4.4).
+vi.mock("@/lib/dados-opcoes/cadeia", () => ({ getCadeiaCotahist: vi.fn() }));
+vi.mock("@/lib/dados-opcoes/volatilidade", () => ({ getVolatilidadeCotahist: vi.fn() }));
 
 import { auth } from "@/auth";
 import * as brapi from "@/lib/integrations/brapi";
 import * as oplab from "@/lib/integrations/oplab";
+import * as dadosCadeia from "@/lib/dados-opcoes/cadeia";
+import * as dadosVol from "@/lib/dados-opcoes/volatilidade";
 // Classe REAL: `erroIntegracao` faz `instanceof` para devolver 503.
 import { IntegracaoIndisponivelError } from "@/lib/integrations/cache";
 
@@ -159,14 +164,19 @@ describe("GET /api/ativo/{ticker} — cotação + fundamentos (brapi)", () => {
 
 // ── /api/cadeia/{ativo} ──────────────────────────────────────────────────────
 
-describe("GET /api/cadeia/{ativo} — cadeia + IV/IV Rank (OpLab)", () => {
-  it("devolve cadeia, volatilidade e frescor de cada bloco", async () => {
-    vi.mocked(oplab.getCadeiaOpcoes).mockResolvedValue(
-      resultado({ ativo: "PETR4", openInterestDisponivel: false }) as never,
-    );
-    vi.mocked(oplab.getVolatilidadeAtivo).mockResolvedValue(
-      resultado({ ativo: "PETR4", ivRank1a: 72.5 }) as never,
-    );
+describe("GET /api/cadeia/{ativo} — cadeia + IV/IV Rank (COTAHIST)", () => {
+  // Data-base (as-of) EOD: pregão de fechamento que a rota carimba no frescor.
+  const ASOF = new Date("2026-06-15T00:00:00.000Z");
+
+  it("devolve cadeia, volatilidade e frescor EOD de cada bloco", async () => {
+    vi.mocked(dadosCadeia.getCadeiaCotahist).mockResolvedValue({
+      cadeia: { ativo: "PETR4", openInterestDisponivel: false } as never,
+      asOf: ASOF,
+    });
+    vi.mocked(dadosVol.getVolatilidadeCotahist).mockResolvedValue({
+      volatilidade: { ativo: "PETR4", ivRank1a: 72.5, ivRank6m: null } as never,
+      asOf: ASOF,
+    });
 
     const resp = await getCadeia(
       new Request("http://localhost/api/cadeia/petr4"),
@@ -175,16 +185,28 @@ describe("GET /api/cadeia/{ativo} — cadeia + IV/IV Rank (OpLab)", () => {
     expect(resp.status).toBe(200);
     const body = await resp.json();
 
-    expect(body.ativo).toBe("PETR4");
+    expect(body.ativo).toBe("PETR4"); // normalizado (uppercase)
     expect(body.cadeia.openInterestDisponivel).toBe(false); // §6.4 #1 repassado
     expect(body.volatilidade.ivRank1a).toBe(72.5);
-    expect(body.frescor.cadeia.origem).toBe("rede");
-    expect(body.frescor.volatilidade.geradoEm).toBe(GERADO_EM.toISOString());
+    expect(body.volatilidade.ivRank6m).toBeNull(); // 6m best-effort pode faltar
+    // Frescor agora é a DATA-BASE EOD (asOf), não o relógio do cache.
+    expect(body.frescor.cadeia.geradoEm).toBe(ASOF.toISOString());
+    expect(body.frescor.cadeia.desatualizado).toBe(false);
+    expect(body.frescor.volatilidade.geradoEm).toBe(ASOF.toISOString());
+    // Consumiu a camada de dados própria, não a OpLab.
+    expect(dadosCadeia.getCadeiaCotahist).toHaveBeenCalledWith("PETR4");
   });
 
-  it("volatilidade indisponível degrada para null; cadeia segue", async () => {
-    vi.mocked(oplab.getCadeiaOpcoes).mockResolvedValue(resultado({ ativo: "PETR4" }) as never);
-    vi.mocked(oplab.getVolatilidadeAtivo).mockRejectedValue(new Error("falhou"));
+  it("volatilidade sem IV diária degrada para null; cadeia segue", async () => {
+    vi.mocked(dadosCadeia.getCadeiaCotahist).mockResolvedValue({
+      cadeia: { ativo: "PETR4" } as never,
+      asOf: ASOF,
+    });
+    // Sem `iv_history`: o módulo devolve asOf null → a rota zera o bloco.
+    vi.mocked(dadosVol.getVolatilidadeCotahist).mockResolvedValue({
+      volatilidade: { ativo: "PETR4" } as never,
+      asOf: null,
+    });
 
     const resp = await getCadeia(
       new Request("http://localhost/api/cadeia/PETR4"),
@@ -194,15 +216,33 @@ describe("GET /api/cadeia/{ativo} — cadeia + IV/IV Rank (OpLab)", () => {
     const body = await resp.json();
     expect(body.volatilidade).toBeNull();
     expect(body.frescor.volatilidade).toBeNull();
+    expect(body.frescor.cadeia.geradoEm).toBe(ASOF.toISOString()); // cadeia intacta
   });
 
-  it("ativo inválido → 400", async () => {
+  it("ativo sem cadeia ingerida (asOf null) → 503", async () => {
+    vi.mocked(dadosCadeia.getCadeiaCotahist).mockResolvedValue({
+      cadeia: { ativo: "PETR4" } as never,
+      asOf: null,
+    });
+
+    const resp = await getCadeia(
+      new Request("http://localhost/api/cadeia/PETR4"),
+      ctx({ ativo: "PETR4" }),
+    );
+    expect(resp.status).toBe(503);
+    const body = await resp.json();
+    expect(body.erro).toMatch(/sem dados/i);
+    // Não tenta a volatilidade quando a cadeia essencial falta.
+    expect(dadosVol.getVolatilidadeCotahist).not.toHaveBeenCalled();
+  });
+
+  it("ativo inválido → 400, sem tocar na camada de dados", async () => {
     const resp = await getCadeia(
       new Request("http://localhost/api/cadeia/123"),
       ctx({ ativo: "123" }),
     );
     expect(resp.status).toBe(400);
-    expect(oplab.getCadeiaOpcoes).not.toHaveBeenCalled();
+    expect(dadosCadeia.getCadeiaCotahist).not.toHaveBeenCalled();
   });
 });
 

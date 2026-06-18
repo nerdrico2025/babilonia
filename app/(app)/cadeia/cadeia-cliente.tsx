@@ -69,17 +69,22 @@ function fmtGrega(v: number | null): string {
   return v == null ? "—" : v.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
 }
 
-/** Formata IV — a OpLab já entrega em % (ex.: 54.08 → "54,1%"). */
+/** Formata IV — a camada de dados já entrega em % (ex.: 54.08 → "54,1%"). */
 function fmtIV(v: number | null): string {
   return v == null ? "—" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
 
-/** "HH:MM" no fuso de São Paulo, a partir de um ISO. */
-function fmtHora(iso: string): string {
+/**
+ * Data-base EOD → "DD/MM/AAAA". A cadeia é dado de FECHAMENTO (§6.2): o frescor
+ * carimba o pregão, não a hora. `geradoEm` é o `trade_date` (meia-noite UTC), então
+ * formata-se em UTC para não recuar um dia no fuso de São Paulo.
+ */
+function fmtDataEod(iso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
   }).format(new Date(iso));
 }
 
@@ -94,14 +99,14 @@ function fmtVencCurto(iso: string): string {
 }
 
 /**
- * `<CadeiaCliente>` — a tela 5 (§8.3). Busca a cadeia via `/api/cadeia` (proxy
- * da OpLab, com cache), mostra calls/puts por vencimento e strike com prêmio,
+ * `<CadeiaCliente>` — a tela 5 (§8.3). Busca a cadeia via `/api/cadeia` (camada de
+ * dados COTAHIST, EOD), mostra calls/puts por vencimento e strike com prêmio,
  * volume, spread e liquidez, carrega as gregas sob demanda (`/api/gregas`, §6.4
- * #2), exibe o frescor do dado e permite enviar séries ao montador.
+ * #2), carimba o FRESCO do dado (fechamento de DD/MM) e permite enviar séries ao
+ * montador.
  *
- * Degrada graciosamente (§6.3): se a fonte cair mas houver cache, a API devolve
- * o dado com `frescor.desatualizado` e a tela mostra o aviso; se não houver nem
- * cache, mostra erro com botão de tentar de novo.
+ * Degrada graciosamente: ativo sem cadeia ingerida (fora da watchlist / sem
+ * COTAHIST) → a API devolve 503 e a tela mostra erro com botão de tentar de novo.
  */
 export function CadeiaCliente() {
   const router = useRouter();
@@ -467,12 +472,6 @@ function BarraFrescor({
   onAtualizar: () => void;
 }) {
   const desatualizado = frescor.desatualizado;
-  const rotuloOrigem =
-    frescor.origem === "rede"
-      ? "atualizado agora"
-      : frescor.origem === "cache"
-        ? "em cache"
-        : "em cache (fonte indisponível)";
 
   return (
     <div
@@ -485,7 +484,7 @@ function BarraFrescor({
     >
       <span className="flex items-center gap-1.5">
         {desatualizado && <AlertTriangle className="size-3.5 shrink-0" aria-hidden />}
-        {frescor.aviso ?? `Dado de ${fmtHora(frescor.geradoEm)} — ${rotuloOrigem}.`}
+        {frescor.aviso ?? `Dado de fechamento de ${fmtDataEod(frescor.geradoEm)}.`}
       </span>
       <Button variant="outline" size="xs" onClick={onAtualizar} disabled={carregando}>
         <RefreshCw className={cn("size-3", carregando && "animate-spin")} aria-hidden />

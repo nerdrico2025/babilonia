@@ -1,32 +1,51 @@
 /**
- * GET /api/cadeia/{ativo} — cadeia de opções + IV/IV Rank do ativo (OpLab, §6.2).
+ * GET /api/cadeia/{ativo} — cadeia de opções + IV/IV Rank do ativo (COTAHIST, §6.2).
  *
- * Proxy do §5.1: esconde o `OPLAB_ACCESS_TOKEN` (server-only) e usa a camada
- * `lib/integrations/oplab` (com cache). Devolve dois blocos com frescor próprio:
- *  - `cadeia`: grade call/put por strike e vencimento (a chamada mais pesada);
+ * PRIMEIRA TROCA AO VIVO (passo 4.4): a rota consome a camada de dados própria
+ * (`lib/dados-opcoes`, COTAHIST + Black-Scholes/`iv_history`) NO LUGAR da OpLab. O
+ * SHAPE do JSON e o comportamento visto pela UI ficam iguais — só o FRESCOR muda de
+ * "dado de HH:MM" para a DATA-BASE de fechamento (EOD), pois o dado é ingerido por
+ * job (§5.1) e não tem cache de request. Devolve dois blocos:
+ *  - `cadeia`: grade call/put por strike e vencimento (essencial — sem ela, 503);
  *  - `volatilidade`: IV atual + IV Rank/percentil do ATIVO-OBJETO (§6.4 #3 — IV
- *    Rank só existe no ativo, nunca por contrato).
+ *    Rank só existe no ativo, nunca por contrato; complementar — degrada para null).
  *
- * ⚠️ Lacunas §6.4 sinalizadas pela própria camada e repassadas honestamente:
- *  - gregas/IV por opção NÃO vêm na cadeia → ver `GET /api/gregas`;
- *  - open interest NÃO existe na OpLab → liquidez por volume + spread + MM.
+ * O frescor de cada bloco carimba o `asOf` (pregão de fechamento mais recente) do
+ * respectivo módulo — o último pregão válido varia por ativo.
+ *
+ * ⚠️ Lacunas §6.4 repassadas honestamente pela camada de dados:
+ *  - gregas/IV por opção NÃO vêm na cadeia → ver `GET /api/gregas` (on-demand);
+ *  - open interest NÃO existe no COTAHIST → liquidez por volume + spread.
+ *
+ * A `/api/gregas` segue na OpLab por ora (trocada no passo 4.5) — não mexida aqui.
  */
-import {
-  getCadeiaOpcoes,
-  getVolatilidadeAtivo,
-} from "@/lib/integrations/oplab";
+import { getCadeiaCotahist } from "@/lib/dados-opcoes/cadeia";
+import { getVolatilidadeCotahist } from "@/lib/dados-opcoes/volatilidade";
 
 import {
   erroIntegracao,
   exigirSessao,
-  frescorDe,
-  lerForcar,
   tickerSchema,
   erroParametro,
+  type Frescor,
 } from "../../_lib/http";
 
+/**
+ * Frescor de um bloco EOD: o dado é o FECHAMENTO do pregão `asOf`. Não há rede nem
+ * cache de request (o COTAHIST é ingerido por job), então `origem` é o dado em si e
+ * `desatualizado` é sempre `false`. A UI formata `geradoEm` como "fechamento de DD/MM".
+ */
+function frescorEod(asOf: Date): Frescor {
+  return {
+    origem: "rede",
+    geradoEm: asOf.toISOString(),
+    desatualizado: false,
+    podeForcarAtualizacao: false,
+  };
+}
+
 export async function GET(
-  request: Request,
+  _request: Request,
   ctx: { params: Promise<{ ativo: string }> },
 ) {
   const negado = await exigirSessao();
@@ -38,19 +57,33 @@ export async function GET(
     return erroParametro("ativo inválido", parsed.error.issues);
   }
   const ativo = parsed.data;
-  const forcar = lerForcar(request.url);
 
   try {
-    // A cadeia é o dado essencial da tela; se faltar (sem cache) a rota cai 503.
-    const cadeia = await getCadeiaOpcoes(ativo, { forcar });
+    // A cadeia é o dado essencial da tela. Sem data-base (ativo fora da watchlist
+    // ou ainda sem COTAHIST ingerido) → 503, como hoje.
+    const { cadeia, asOf } = await getCadeiaCotahist(ativo);
+    if (asOf === null) {
+      return Response.json(
+        {
+          erro: "sem dados de opções para este ativo",
+          mensagem:
+            "Ainda não há cadeia de opções (COTAHIST) ingerida para este ativo. " +
+            "Ele pode estar fora da watchlist ou sem dados de fechamento.",
+        },
+        { status: 503 },
+      );
+    }
 
-    // Volatilidade (IV Rank) é complementar — não derruba a cadeia se faltar.
+    // Volatilidade (IV Rank) é complementar — não derruba a cadeia se faltar. Sem
+    // IV diária em `iv_history` (asOf null) ela degrada para null, como hoje.
     let volatilidade = null;
-    let frescorVolatilidade = null;
+    let frescorVolatilidade: Frescor | null = null;
     try {
-      const r = await getVolatilidadeAtivo(ativo, { forcar });
-      volatilidade = r.dado;
-      frescorVolatilidade = frescorDe(r);
+      const r = await getVolatilidadeCotahist(ativo);
+      if (r.asOf !== null) {
+        volatilidade = r.volatilidade;
+        frescorVolatilidade = frescorEod(r.asOf);
+      }
     } catch {
       volatilidade = null;
       frescorVolatilidade = null;
@@ -58,10 +91,10 @@ export async function GET(
 
     return Response.json({
       ativo,
-      cadeia: cadeia.dado,
+      cadeia,
       volatilidade,
       frescor: {
-        cadeia: frescorDe(cadeia),
+        cadeia: frescorEod(asOf),
         volatilidade: frescorVolatilidade,
       },
     });

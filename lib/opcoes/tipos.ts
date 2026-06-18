@@ -83,6 +83,17 @@ export interface VolatilidadeAtivo {
   ewmaAtual: number | null;
   /** Sempre `false`: IV Rank existe só no ativo, nunca por contrato (§6.4 #3). */
   ivRankPorContratoDisponivel: false;
+  /**
+   * Confiabilidade do IV Rank de 1 ANO (a UI usa para o aviso "histórico
+   * parcial/insuficiente", §9). OPCIONAL: a fonte OpLab não preenche (e não precisa
+   * mudar). `estado`: 'completo' (≥252 pregões) / 'parcial' (120–251) /
+   * 'insuficiente' (<120 → ranks `null`). `diasJanela`: pregões efetivamente na
+   * janela. (O 6m não tem badge próprio — herda este aviso.)
+   */
+  confiabilidade?: {
+    estado: "completo" | "parcial" | "insuficiente";
+    diasJanela: number;
+  };
 }
 
 // ── Gregas por opção ──────────────────────────────────────────────────────────

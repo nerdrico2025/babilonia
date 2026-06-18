@@ -80,6 +80,20 @@ export interface PontoIv {
 /** Confiabilidade do Rank conforme o tamanho do histórico disponível. */
 export type EstadoIvRank = "completo" | "parcial" | "insuficiente";
 
+/**
+ * Ajustes da JANELA do Rank (todos opcionais; defaults = janela de 1 ano). Servem
+ * para a leitura de 6 MESES (lookback 126), sem duplicar a lógica: o chamador passa
+ * `{ lookback: 126, diasCompletos: 126, diasMinimos: 60 }`. Sem nada, é 1 ano.
+ */
+export interface OpcoesIvRank {
+  /** Tamanho da janela de lookback, em pregões (default `LOOKBACK` = 252). */
+  lookback?: number;
+  /** Piso de pregões para 'completo' (default `DIAS_COMPLETO` = 252). */
+  diasCompletos?: number;
+  /** Piso de pregões para 'parcial'; abaixo disto é 'insuficiente' (default `DIAS_MINIMOS_PARCIAL` = 120). */
+  diasMinimos?: number;
+}
+
 /** Resultado do IV Rank/Percentil de um ativo num pregão alvo. */
 export interface ResultadoIvRank {
   /**
@@ -118,10 +132,14 @@ export function percentilType7(ordenado: readonly number[], p: number): number {
   return vLo + (h - lo) * (vHi - vLo);
 }
 
-/** Estado de confiabilidade a partir do nº de pregões na janela. */
-function estadoPorDias(dias: number): EstadoIvRank {
-  if (dias >= DIAS_COMPLETO) return "completo";
-  if (dias >= DIAS_MINIMOS_PARCIAL) return "parcial";
+/** Estado de confiabilidade a partir do nº de pregões na janela e dos pisos. */
+function estadoPorDias(
+  dias: number,
+  diasCompletos: number,
+  diasMinimos: number,
+): EstadoIvRank {
+  if (dias >= diasCompletos) return "completo";
+  if (dias >= diasMinimos) return "parcial";
   return "insuficiente";
 }
 
@@ -141,20 +159,28 @@ function clamp(x: number, min: number, max: number): number {
  *   últimas `LOOKBACK` (252) entradas como janela. Espera-se que INCLUA o pregão
  *   alvo (a janela termina nele).
  * @param ivAlvo IV do dia alvo (em decimal) — o ponto que se quer situar.
- * @returns `ResultadoIvRank`. Em 'insuficiente' (janela < 120), `ivRank` e
+ * @param opcoes Ajustes de janela (ver `OpcoesIvRank`). Sem nada = janela de 1 ano
+ *   (252; 'completo' ≥ 252, 'parcial' ≥ 120). Para 6 meses, passe
+ *   `{ lookback: 126, diasCompletos: 126, diasMinimos: 60 }`.
+ * @returns `ResultadoIvRank`. Em 'insuficiente' (janela abaixo do piso), `ivRank` e
  *   `ivPercentil` vêm `null` (não se fabrica métrica sobre base curta).
  */
 export function calcularIvRank(
   serie: readonly PontoIv[],
   ivAlvo: number,
+  opcoes: OpcoesIvRank = {},
 ): ResultadoIvRank {
-  // Janela = últimos LOOKBACK pregões disponíveis (ordem cronológica asc).
+  const lookback = opcoes.lookback ?? LOOKBACK;
+  const diasCompletos = opcoes.diasCompletos ?? DIAS_COMPLETO;
+  const diasMinimos = opcoes.diasMinimos ?? DIAS_MINIMOS_PARCIAL;
+
+  // Janela = últimos `lookback` pregões disponíveis (ordem cronológica asc).
   const ordenadaPorData = [...serie].sort(
     (a, b) => a.tradeDate.getTime() - b.tradeDate.getTime(),
   );
-  const janela = ordenadaPorData.slice(-LOOKBACK);
+  const janela = ordenadaPorData.slice(-lookback);
   const diasNaJanela = janela.length;
-  const estado = estadoPorDias(diasNaJanela);
+  const estado = estadoPorDias(diasNaJanela, diasCompletos, diasMinimos);
 
   // 'insuficiente': base curta demais — não se calcula Rank nem Percentil (§2.4).
   if (estado === "insuficiente") {

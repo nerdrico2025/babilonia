@@ -58,6 +58,21 @@ export function frescorDe(r: ResultadoIntegracao<unknown>): Frescor {
 }
 
 /**
+ * Frescor de um bloco EOD (COTAHIST): o dado é o FECHAMENTO do pregão `asOf`. Como
+ * o COTAHIST é ingerido por job (§5.1), não há rede nem cache de request — `origem`
+ * é o próprio dado e `desatualizado` é sempre `false`. A UI formata `geradoEm` como
+ * "fechamento de DD/MM". Usado pelas rotas `/api/cadeia` e `/api/gregas`.
+ */
+export function frescorEod(asOf: Date): Frescor {
+  return {
+    origem: "rede",
+    geradoEm: asOf.toISOString(),
+    desatualizado: false,
+    podeForcarAtualizacao: false,
+  };
+}
+
+/**
  * Guarda de sessão (§13). O `proxy.ts` já barra o acesso não autenticado, mas
  * checamos de novo aqui (defesa em profundidade) e devolvemos **401 JSON** —
  * uma rota de API não deve redirecionar para a tela de login.

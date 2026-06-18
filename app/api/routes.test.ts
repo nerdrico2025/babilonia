@@ -3,8 +3,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 /**
  * Testes de integração leves dos Route Handlers (§5.1/§13 do PRD).
  *
- * O auth (`@/auth`) e as integrações (`brapi`/`oplab`) são MOCKADOS — nada toca
- * a rede, o Postgres ou o NextAuth real. Validamos o contrato de cada rota:
+ * O auth (`@/auth`), o brapi e a camada de dados COTAHIST (`lib/dados-opcoes`) são
+ * MOCKADOS — nada toca a rede, o Postgres ou o NextAuth real. Validamos o contrato:
  * guarda de sessão (401), validação de parâmetro (400), uso da camada de cache,
  * o metadado de frescor (§6.3) e a degradação graciosa de dados complementares.
  */
@@ -20,20 +20,16 @@ vi.mock("@/lib/integrations/brapi", () => ({
   getCalendarioResultados: vi.fn(),
 }));
 
-// /api/gregas ainda usa a OpLab (trocada no passo 4.5); /api/cadeia já não.
-vi.mock("@/lib/integrations/oplab", () => ({
-  getGregas: vi.fn(),
-}));
-
-// Camada de dados própria (COTAHIST) que a /api/cadeia passou a consumir (4.4).
+// Camada de dados própria (COTAHIST) que as rotas /api/cadeia e /api/gregas consomem.
 vi.mock("@/lib/dados-opcoes/cadeia", () => ({ getCadeiaCotahist: vi.fn() }));
 vi.mock("@/lib/dados-opcoes/volatilidade", () => ({ getVolatilidadeCotahist: vi.fn() }));
+vi.mock("@/lib/dados-opcoes/gregas", () => ({ getGregasCotahist: vi.fn() }));
 
 import { auth } from "@/auth";
 import * as brapi from "@/lib/integrations/brapi";
-import * as oplab from "@/lib/integrations/oplab";
 import * as dadosCadeia from "@/lib/dados-opcoes/cadeia";
 import * as dadosVol from "@/lib/dados-opcoes/volatilidade";
+import * as dadosGregas from "@/lib/dados-opcoes/gregas";
 // Classe REAL: `erroIntegracao` faz `instanceof` para devolver 503.
 import { IntegracaoIndisponivelError } from "@/lib/integrations/cache";
 
@@ -248,42 +244,72 @@ describe("GET /api/cadeia/{ativo} — cadeia + IV/IV Rank (COTAHIST)", () => {
 
 // ── /api/gregas ──────────────────────────────────────────────────────────────
 
-describe("GET /api/gregas — gregas por opção via BS (OpLab)", () => {
-  it("calcula as gregas a partir de symbol+irate e devolve frescor", async () => {
-    vi.mocked(oplab.getGregas).mockResolvedValue(
-      resultado({ symbol: "PETRK221", delta: 0.03, iv: 28.5 }) as never,
-    );
+describe("GET /api/gregas — gregas por opção via Black-Scholes (COTAHIST)", () => {
+  const ASOF = new Date("2026-06-17T00:00:00.000Z");
+
+  /** Pega o 2º argumento (opções) da chamada mais recente ao módulo. */
+  function opcoesChamada() {
+    return vi.mocked(dadosGregas.getGregasCotahist).mock.calls.at(-1)![1]!;
+  }
+
+  it("calcula as gregas a partir de symbol e devolve frescor EOD", async () => {
+    vi.mocked(dadosGregas.getGregasCotahist).mockResolvedValue({
+      gregas: { symbol: "PETRK221", delta: 0.5, iv: 28.5, margem: null } as never,
+      asOf: ASOF,
+    });
 
     const resp = await getGregas(
-      new Request("http://localhost/api/gregas?symbol=petrk221&irate=14.75&vol=28.5"),
+      new Request("http://localhost/api/gregas?symbol=petrk221&irate=15&vol=28.5"),
     );
     expect(resp.status).toBe(200);
     const body = await resp.json();
 
-    expect(body.symbol).toBe("PETRK221");
-    expect(body.gregas.delta).toBe(0.03);
-    expect(body.frescor.origem).toBe("rede");
-    // Parâmetros coeridos (texto → número) e símbolo normalizado.
-    expect(oplab.getGregas).toHaveBeenCalledWith(
-      expect.objectContaining({ symbol: "PETRK221", irate: 14.75, vol: 28.5 }),
-      { forcar: false },
+    expect(body.symbol).toBe("PETRK221"); // normalizado (uppercase)
+    expect(body.gregas.delta).toBe(0.5);
+    expect(body.gregas.margem).toBeNull(); // campo não calculável segue null, sem quebrar
+    // Frescor agora é a data-base EOD (trade_date da série), não o relógio.
+    expect(body.frescor.geradoEm).toBe(ASOF.toISOString());
+    expect(body.frescor.desatualizado).toBe(false);
+    // Consumiu a camada própria; vol repassado; symbol normalizado.
+    expect(dadosGregas.getGregasCotahist).toHaveBeenCalledWith(
+      "PETRK221",
+      expect.objectContaining({ vol: 28.5 }),
     );
+    // irate (% Selic) é convertido para a taxa CONTÍNUA `r` = ln(1 + i/100).
+    expect(opcoesChamada().r).toBeCloseTo(Math.log(1 + 15 / 100), 10);
   });
 
-  it("sem irate (obrigatório) → 400, sem chamar a calculadora", async () => {
+  it("sem irate → auto-SELIC (200, r indefinido); não mais 400", async () => {
+    vi.mocked(dadosGregas.getGregasCotahist).mockResolvedValue({
+      gregas: { symbol: "PETRK221", delta: 0.3 } as never,
+      asOf: ASOF,
+    });
+
     const resp = await getGregas(
       new Request("http://localhost/api/gregas?symbol=PETRK221"),
     );
-    expect(resp.status).toBe(400);
-    expect(oplab.getGregas).not.toHaveBeenCalled();
+    expect(resp.status).toBe(200);
+    // Sem override: r indefinido → o módulo busca a SELIC do BCB-SGS na data.
+    expect(opcoesChamada().r).toBeUndefined();
   });
 
-  it("sem sessão → 401", async () => {
+  it("irate é override e vai como taxa contínua", async () => {
+    vi.mocked(dadosGregas.getGregasCotahist).mockResolvedValue({
+      gregas: { symbol: "PETRK221" } as never,
+      asOf: ASOF,
+    });
+
+    await getGregas(new Request("http://localhost/api/gregas?symbol=PETRK221&irate=10"));
+    expect(opcoesChamada().r).toBeCloseTo(Math.log(1.1), 10); // ln(1,10) ≈ 0,09531
+  });
+
+  it("sem sessão → 401, sem chamar a calculadora", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
     const resp = await getGregas(
-      new Request("http://localhost/api/gregas?symbol=PETRK221&irate=14.75"),
+      new Request("http://localhost/api/gregas?symbol=PETRK221&irate=15"),
     );
     expect(resp.status).toBe(401);
+    expect(dadosGregas.getGregasCotahist).not.toHaveBeenCalled();
   });
 });
 

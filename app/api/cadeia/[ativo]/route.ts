@@ -25,24 +25,11 @@ import { getVolatilidadeCotahist } from "@/lib/dados-opcoes/volatilidade";
 import {
   erroIntegracao,
   exigirSessao,
+  frescorEod,
   tickerSchema,
   erroParametro,
   type Frescor,
 } from "../../_lib/http";
-
-/**
- * Frescor de um bloco EOD: o dado é o FECHAMENTO do pregão `asOf`. Não há rede nem
- * cache de request (o COTAHIST é ingerido por job), então `origem` é o dado em si e
- * `desatualizado` é sempre `false`. A UI formata `geradoEm` como "fechamento de DD/MM".
- */
-function frescorEod(asOf: Date): Frescor {
-  return {
-    origem: "rede",
-    geradoEm: asOf.toISOString(),
-    desatualizado: false,
-    podeForcarAtualizacao: false,
-  };
-}
 
 export async function GET(
   _request: Request,

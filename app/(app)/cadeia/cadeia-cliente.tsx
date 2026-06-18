@@ -185,7 +185,7 @@ export function CadeiaCliente() {
   })();
 
   async function carregarGregas() {
-    if (!dados || selicNum == null || linhas.length === 0) return;
+    if (!dados || linhas.length === 0) return;
     const dtm = serieSel?.diasAteVencimento ?? undefined;
     const spot = dados.cadeia.precoAtivo ?? undefined;
     const alvos = linhas.map((l) => l.op);
@@ -199,7 +199,9 @@ export function CadeiaCliente() {
 
     await Promise.all(
       alvos.map(async (op) => {
-        const p = new URLSearchParams({ symbol: op.symbol, irate: String(selicNum), tipo: op.tipo });
+        const p = new URLSearchParams({ symbol: op.symbol, tipo: op.tipo });
+        // SELIC é opcional: em branco, a rota auto-preenche a do dia (BCB-SGS).
+        if (selicNum != null) p.set("irate", String(selicNum));
         const mid = precoReferencia(op);
         if (mid != null) p.set("premium", String(mid));
         if (op.strike) p.set("strike", String(op.strike));
@@ -355,22 +357,22 @@ export function CadeiaCliente() {
             <div className="flex items-end gap-2">
               <div className="flex flex-col gap-1">
                 <label htmlFor="selic" className="text-xs text-muted-foreground">
-                  SELIC (% a.a.) p/ gregas
+                  SELIC (% a.a.) p/ gregas — opcional
                 </label>
                 <Input
                   id="selic"
                   value={selic}
                   onChange={(e) => setSelic(e.target.value)}
-                  placeholder="ex.: 15"
+                  placeholder="deixe em branco p/ a Selic do dia"
                   inputMode="decimal"
-                  className="h-8 w-28"
+                  className="h-8 w-56"
                 />
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={carregarGregas}
-                disabled={selicNum == null || carregandoGregas || linhas.length === 0}
+                disabled={carregandoGregas || linhas.length === 0}
               >
                 {carregandoGregas ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
                 Carregar gregas

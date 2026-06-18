@@ -152,9 +152,10 @@ describe.skipIf(!TEM_DB)("getGregasCotahist (banco real)", () => {
   }
 
   it("symbol real de PETR4: gregas/IV plausíveis com auto-SELIC", async () => {
-    const { symbol } = await escolherCallPetr4();
-    const g = await getGregasCotahist(symbol, { fetchImpl: fetchSelicStub });
+    const { symbol, dataBase } = await escolherCallPetr4();
+    const { gregas: g, asOf } = await getGregasCotahist(symbol, { fetchImpl: fetchSelicStub });
 
+    expect(asOf.getTime()).toBe(dataBase.getTime()); // as-of = trade_date da série
     expect(g.symbol).toBe(symbol);
     expect(g.spotPrice).toBeCloseTo(38.57, 2); // spot PETR4 na data-base
     expect(g.delta!).toBeGreaterThan(0);
@@ -172,7 +173,7 @@ describe.skipIf(!TEM_DB)("getGregasCotahist (banco real)", () => {
   it("override de vol/r é respeitado (iv = vol; sem rede)", async () => {
     const { symbol } = await escolherCallPetr4();
     // vol override fixa a IV; r override evita a busca de SELIC (sem fetch).
-    const g = await getGregasCotahist(symbol, { vol: 30, r: 0.1 });
+    const { gregas: g } = await getGregasCotahist(symbol, { vol: 30, r: 0.1 });
     expect(g.iv).toBeCloseTo(30, 6);
     expect(g.delta).not.toBeNull();
   });

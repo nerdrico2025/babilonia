@@ -141,6 +141,13 @@ export function montarGregas(p: ParametrosMontarGregas): GregasOpcao {
   };
 }
 
+/** Resultado das gregas + a data-base (as-of) da série, para a rota carimbar o frescor. */
+export interface ResultadoGregasCotahist {
+  gregas: GregasOpcao;
+  /** Pregão (trade_date) da série usada — sempre presente (a função lança se não acha o symbol). */
+  asOf: Date;
+}
+
 /** Overrides/ajustes de `getGregasCotahist` (todos opcionais). */
 export interface OpcoesGregas {
   db?: Db;
@@ -171,11 +178,14 @@ export interface OpcoesGregas {
  * Gregas + IV de UMA opção a partir do COTAHIST, sob demanda. Ver o cabeçalho do
  * módulo para a origem de cada número e as unidades. Lança se o `symbol` não existe
  * em `opcao_cotahist` (deve vir da cadeia); demais ausências degradam para `null`.
+ *
+ * Devolve `{ gregas, asOf }` (simétrico a `getCadeiaCotahist`/`getVolatilidadeCotahist`):
+ * `asOf` é o `trade_date` da série, que a rota usa para carimbar o frescor (EOD).
  */
 export async function getGregasCotahist(
   symbol: string,
   opcoes: OpcoesGregas = {},
-): Promise<GregasOpcao> {
+): Promise<ResultadoGregasCotahist> {
   const db = opcoes.db ?? getDb();
   const sym = symbol.toUpperCase();
 
@@ -235,5 +245,6 @@ export async function getGregasCotahist(
       ? opcoes.dtm / DIAS_POR_ANO
       : (row.expiresAt.getTime() - tradeDate.getTime()) / MS_POR_DIA / DIAS_POR_ANO;
 
-  return montarGregas({ symbol: sym, tipo, spot, strike, premio, T, r, vol: opcoes.vol });
+  const gregas = montarGregas({ symbol: sym, tipo, spot, strike, premio, T, r, vol: opcoes.vol });
+  return { gregas, asOf: tradeDate };
 }

@@ -224,10 +224,10 @@ describe("calcularIvRepresentativa — escolha da ATM + round-trip", () => {
     expect(res.iv).toBeCloseTo(0.4, 4);
   });
 
-  it("spread absurdo (> 100% do MID): série é pulada por MID não confiável", () => {
+  it("spread absurdo (> limite): série é pulada por MID não confiável", () => {
     const spot = 38;
     const venc = 30;
-    // ATM (38) líquida com dois lados, mas spread relativo = 1,5/1,25 = 1,2 > 1,0.
+    // ATM (38) líquida com dois lados, mas spread relativo = 1,5/1,25 = 1,2 > 0,7.
     // Descarta e sobe para a 36, com spread são.
     const cadeia: OpcaoDoDia[] = [
       opcao({ optionSymbol: "C38_SPREAD", tipo: "call", strike: 38, bid: 0.5, ask: 2.0, vencimento: vencEmDias(venc) }),
@@ -239,6 +239,41 @@ describe("calcularIvRepresentativa — escolha da ATM + round-trip", () => {
     expect(res.iv).not.toBeNull();
     if (res.iv === null) return;
     expect(res.opcaoUsada).toBe("C36");
+    expect(res.iv).toBeCloseTo(0.4, 4);
+  });
+
+  it("spread no limite mais rígido (0,7): quote largo que ANTES passava agora é pulado", () => {
+    const spot = 38;
+    const venc = 30;
+    // ATM (38): bid 1,0 / ask 2,2 → mid 1,6, spread relativo 1,2/1,6 = 0,75 > 0,7.
+    // Antes (limite 1,0) passaria; agora é descartada e sobe para a 36.
+    const cadeia: OpcaoDoDia[] = [
+      opcao({ optionSymbol: "C38_075", tipo: "call", strike: 38, bid: 1.0, ask: 2.2, vencimento: vencEmDias(venc) }),
+      opcao({ optionSymbol: "C36", tipo: "call", strike: 36, premio: premioDe("call", spot, 36, venc, 0.4), vencimento: vencEmDias(venc) }),
+    ];
+
+    const res = calcularIvRepresentativa({ spot, cadeia, r: R, tradeDate: TRADE_DATE });
+
+    expect(res.iv).not.toBeNull();
+    if (res.iv === null) return;
+    expect(res.opcaoUsada).toBe("C36");
+    expect(res.iv).toBeCloseTo(0.4, 4);
+  });
+
+  it("trava de moneyness: série JUSTO dentro da trava (≤15%) é aceita", () => {
+    const spot = 38;
+    const venc = 30;
+    // Única líquida é a strike 33 (moneyness 33/38−1 = −13,2%, dentro de 15%).
+    // É aceita (a trava não pode rejeitar séries quase no dinheiro).
+    const cadeia: OpcaoDoDia[] = [
+      opcao({ optionSymbol: "C33", tipo: "call", strike: 33, premio: premioDe("call", spot, 33, venc, 0.4), vencimento: vencEmDias(venc) }),
+    ];
+
+    const res = calcularIvRepresentativa({ spot, cadeia, r: R, tradeDate: TRADE_DATE });
+
+    expect(res.iv).not.toBeNull();
+    if (res.iv === null) return;
+    expect(res.opcaoUsada).toBe("C33");
     expect(res.iv).toBeCloseTo(0.4, 4);
   });
 
@@ -293,6 +328,21 @@ describe("calcularIvRepresentativa — gaps (não inventa)", () => {
     const cadeia: OpcaoDoDia[] = [
       opcao({ optionSymbol: "C38", tipo: "call", strike: 38, premio: premioDe("call", spot, 38, 30, 0.4), vencimento: vencEmDias(30), volumeFinanceiro: 0, numeroNegocios: 0 }),
       opcao({ optionSymbol: "C40", tipo: "call", strike: 40, premio: premioDe("call", spot, 40, 30, 0.4), vencimento: vencEmDias(30), volumeFinanceiro: 0, numeroNegocios: 0 }),
+    ];
+    const res = calcularIvRepresentativa({ spot, cadeia, r: R, tradeDate: TRADE_DATE });
+    expect(res.iv).toBeNull();
+    if (res.iv !== null) return;
+    expect(res.motivo).toBe("sem-serie-liquida-com-iv");
+  });
+
+  it("trava de moneyness: única série líquida é deep-ITM (>15%) → gap (não cai no strike distante)", () => {
+    const spot = 38;
+    // Reproduz o caso ITSA4: a ATM/perto-do-dinheiro é ilíquida e só sobra uma
+    // série DEEP-ITM (strike 30 = −21% do spot), líquida e com dois lados. A trava
+    // de moneyness a rejeita → gap, em vez de gerar a IV inflada do strike distante.
+    const cadeia: OpcaoDoDia[] = [
+      opcao({ optionSymbol: "C38_ILIQ", tipo: "call", strike: 38, premio: premioDe("call", spot, 38, 30, 0.4), vencimento: vencEmDias(30), volumeFinanceiro: 0, numeroNegocios: 0 }),
+      opcao({ optionSymbol: "C30_ITM", tipo: "call", strike: 30, premio: premioDe("call", spot, 30, 30, 0.4), vencimento: vencEmDias(30) }),
     ];
     const res = calcularIvRepresentativa({ spot, cadeia, r: R, tradeDate: TRADE_DATE });
     expect(res.iv).toBeNull();

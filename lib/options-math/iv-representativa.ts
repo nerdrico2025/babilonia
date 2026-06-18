@@ -50,7 +50,9 @@
  *     dias; desempate por MAIOR liquidez (maior `numeroNegocios` da série líquida
  *     mais negociada), depois pelo próprio vencimento (determinístico).
  *  5. ATM = strike mais próximo do spot, DENTRO do vencimento escolhido (entre as
- *     séries líquidas). Desempate documentado em `ordenarPorAtm`.
+ *     séries líquidas e DENTRO da trava de moneyness `MONEYNESS_MAXIMO` — séries
+ *     deep-ITM/OTM não representam a IV ATM). Desempate documentado em
+ *     `ordenarPorAtm`.
  *  6. Prêmio = MID = (bid+ask)/2, EXIGINDO bid>0 E ask>0 (oferta dos dois lados)
  *     e spread relativo (ask−bid)/mid ≤ `SPREAD_RELATIVO_MAXIMO` (1,0 = 100%).
  *     Série sem oferta de dois lados ou com spread absurdo é DESCARTADA (é onde
@@ -96,10 +98,24 @@ export const VOLUME_MINIMO = 50_000;
 
 /**
  * Spread relativo máximo aceito na série: (ask−bid)/mid. Acima disso a oferta é
- * larga demais para um MID confiável → descarta. 1,0 = o spread iguala o mid (a
- * oferta de venda é o dobro da de compra) — claramente intratável.
+ * larga demais para um MID confiável → descarta. 0,7 escolhido pela varredura de
+ * 2026-06-18 (cobertura × resíduo): apertar de 1,0 → 0,7 corta quotes largos que
+ * inflavam a IV, com custo de cobertura concentrado em ativos já ilíquidos e SEM
+ * tocar em PETR4/VALE3; 0,5 perderia ~75 dias a mais sem reduzir os dias > 120%.
  */
-export const SPREAD_RELATIVO_MAXIMO = 1.0;
+export const SPREAD_RELATIVO_MAXIMO = 0.7;
+
+/**
+ * TRAVA DE MONEYNESS: distância relativa máxima do strike ao spot,
+ * |strike/spot − 1|, para a série ser aceita como "ATM". Acima disso a série é
+ * deep-ITM/OTM e não representa a IV ATM (além de ter prêmio dominado por valor
+ * intrínseco → IV instável). Evita o fallback para um strike distante quando não
+ * há série líquida perto do dinheiro: nesse caso o dia é GAP, não um número ruim.
+ * 0,15 escolhido pela varredura de 2026-06-18: remove o caso deep-ITM da ITSA4
+ * (strike −20,6% do spot → IV 174%) com custo de cobertura bem menor que 0,10
+ * (mesma proteção, já que o outlier estava a −20,6%).
+ */
+export const MONEYNESS_MAXIMO = 0.15;
 
 const MS_POR_DIA = 86_400_000;
 
@@ -158,6 +174,8 @@ export interface ParametrosIvRepresentativa {
   volumeMinimo?: number;
   /** Spread relativo máximo (default `SPREAD_RELATIVO_MAXIMO`). */
   spreadMaximo?: number;
+  /** Trava de moneyness |strike/spot−1| máxima (default `MONEYNESS_MAXIMO`). */
+  moneynessMaximo?: number;
 }
 
 /** Resultado COM IV — inclui os campos de auditoria (de onde veio o número). */
@@ -251,6 +269,7 @@ export function calcularIvRepresentativa(
   const negMinimo = p.negMinimo ?? NEG_MINIMO;
   const volumeMinimo = p.volumeMinimo ?? VOLUME_MINIMO;
   const spreadMaximo = p.spreadMaximo ?? SPREAD_RELATIVO_MAXIMO;
+  const moneynessMaximo = p.moneynessMaximo ?? MONEYNESS_MAXIMO;
 
   if (!(p.spot > 0)) return { iv: null, motivo: "spot-invalido" };
   if (p.cadeia.length === 0) return { iv: null, motivo: "cadeia-vazia" };
@@ -286,6 +305,9 @@ export function calcularIvRepresentativa(
         (o) =>
           o.numeroNegocios >= negMinimo && o.volumeFinanceiro >= volumeMinimo,
       )
+      // Trava de moneyness: só séries perto do dinheiro representam a IV ATM. Sem
+      // série líquida dentro da trava, o vencimento não contribui (→ próximo/gap).
+      .filter((o) => Math.abs(o.strike / p.spot - 1) <= moneynessMaximo)
       .sort(ordenarPorAtm(p.spot));
     if (candidatas.length === 0) continue;
     const liquidez = candidatas.reduce(

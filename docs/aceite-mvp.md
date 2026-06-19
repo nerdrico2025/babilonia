@@ -1,142 +1,151 @@
 # Relatório de Aceite do MVP — Babilônia
 
-**Data:** 16/06/2026 · **Escopo:** §13 (requisitos não-funcionais) e §16 (critérios de aceite) do PRD.
+**Data:** 19/06/2026 · **Escopo:** §13 (requisitos não-funcionais) e §16 (critérios de aceite) do PRD.
 
 > Legenda: ✅ Atendido · ⚠️ Atendido com ressalva · ⛔ Não atendido.
+>
+> Revalidação completa do checklist **após as duas migrações de fonte de dados**
+> (ver "Histórico de migrações" no fim). Cada item foi reconferido contra o código
+> ATUAL — não contra o relatório anterior (era OpLab+brapi).
 
-## Resumo
+## Portões (re-rodados em 19/06/2026)
 
 | Portão | Resultado |
 |---|---|
-| `npm test` (Vitest) | ✅ **207 testes, 17 arquivos — todos passam** |
+| `npm test` (Vitest) | ✅ **338 testes, 27 arquivos — todos passam** |
 | `npm run typecheck` (tsc) | ✅ sem erros |
-| `npm run lint` (ESLint) | ✅ sem problemas |
-| `npm run build` (Next 16 / Turbopack) | ✅ compila e gera as 14 rotas |
+| `npm run lint` (ESLint) | ✅ 0 erros, 0 warnings |
+| `npm run build` (Next 16 / Turbopack) | ✅ compila e gera as rotas |
 
-## 1. Deploy na Vercel (preparação)
+## Env vars necessárias para deploy (atual)
 
-O projeto é um app Next.js (App Router) — deploy **zero-config** na Vercel (framework
-autodetectado). O build de produção está **verde**. A conexão com o banco é **lazy**
-(`getDb()` só conecta em runtime) e as páginas são dinâmicas (`ƒ`), então o build
-**não exige** `DATABASE_URL`.
-
-**Variáveis de ambiente (todas server-only, §13/§5.1)** — configurar em
-*Project → Settings → Environment Variables* (Production/Preview), conforme `.env.example`:
+Confirmadas contra o `.env.example` e o schema `lib/env.ts` (server-only, §5.1/§13).
+**Não existem mais `BRAPI_TOKEN` nem `OPLAB_ACCESS_TOKEN`** — removidos nas migrações.
 
 | Variável | Uso |
 |---|---|
-| `BOLSAI_API_KEY` | Fundamentos (bolsai); preço/cadeia vêm do COTAHIST (público) |
-| `DATABASE_URL` | Postgres no **Neon** (use a connection string *pooled*) |
-| `AUTH_SECRET` | Assinatura da sessão (`openssl rand -base64 32`) |
-| `AUTH_USERNAME` / `AUTH_PASSWORD` | Único usuário (mono-usuário) |
+| `BOLSAI_API_KEY` | **Única chave de API.** Fundamentos do ativo-objeto (bolsai). |
+| `DATABASE_URL` | Postgres no **Neon** (connection string *pooled*). |
+| `AUTH_SECRET` | Assinatura da sessão (`openssl rand -base64 32`). |
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | Único usuário (mono-usuário). |
 
-**Passos:**
-1. Provisionar o Postgres no **Neon** (Vercel Marketplace ou conta Neon) e copiar a
-   `DATABASE_URL`.
-2. Definir as 5 variáveis acima no projeto da Vercel. (A cadeia COTAHIST/B3 e a taxa
-   BCB-SGS são fontes públicas, sem chave.)
-3. Rodar as migrations contra o Neon: `npm run db:migrate` (e, se for o primeiro
-   deploy, `npm run db:seed` para criar a linha de `settings` com o capital).
-4. `git push` na branch de produção → build automático. (O `vercel deploy` é um passo
-   **manual** do responsável — não executado por este relatório.)
+> COTAHIST/B3 (preço do objeto + cadeia) e BCB SGS (taxa) são **públicos, sem chave**.
+> A tela de Configurações (`app/(app)/configuracoes/page.tsx`) e o `scripts/preflight.ts`
+> já listam só `BOLSAI_API_KEY` como chave de API.
+>
+> ⚠️ **Observação de segurança (pré-existente, fora do escopo desta verificação):**
+> o `.env.example` versionado contém um `DATABASE_URL` e um `AUTH_SECRET` com valores
+> reais. Recomenda-se rotacionar e substituir por placeholders — não alterado aqui
+> para não mascarar a decisão sem confirmação.
 
-> Não há `vercel.json`/`vercel.ts`: a detecção padrão do Next basta e evita
-> dependência extra.
-
-## 2. Nenhuma chave de API vaza para o cliente (§13/§5.1) — ✅
-
-- `process.env.{BOLSAI_API_KEY,AUTH_SECRET,AUTH_PASSWORD}` só aparece
-  em **código de servidor**: `lib/integrations/bolsai.ts`, `lib/env.ts`,
-  `auth.ts` e a Server Action/route da tela de Configurações.
-- **Nenhuma** variável `NEXT_PUBLIC_*` (que vazaria ao cliente).
-- Os componentes `"use client"` que tocam tipos das integrações usam **`import type`**
-  (apagado em build — não empacota o módulo server-only).
-- Varredura do bundle client gerado (`.next/static`) **não** encontra os nomes dos
-  segredos. A tela de Configurações mostra só *Configurada/Faltando*, nunca o valor.
-
-## 3. Testes e build (§16) — ✅
-
-Todos os testes do Vitest passam (207) e o build de produção conclui sem erros
-(ver tabela do Resumo). Nada a corrigir.
-
-## 4. Critérios de aceite do §16
+## Checklist do §16 — item a item (evidência atual)
 
 - [x] **Login → dashboard com book vazio.** — ✅
-  Auth.js v5 com provider Credentials e comparação em tempo constante
-  (`timingSafeEqual`, `auth.ts`); `proxy.ts` protege tudo exceto `/api/auth`,
-  `/api/health` e estáticos. Dashboard com estado vazio amigável
-  (`app/(app)/page.tsx`, "Seu book está vazio").
-  *Ressalva:* o login real exige `AUTH_*`/`DATABASE_URL` no ambiente — confirmar no
-  smoke test pós-deploy.
+  Auth.js v5, provider Credentials com comparação em tempo constante
+  (`timingSafeEqual`, `auth.ts`); `proxy.ts` protege tudo exceto `/api/auth` e
+  estáticos. Estado vazio amigável em `app/(app)/page.tsx` ("Seu book está vazio").
+  *Ressalva:* o login real exige `AUTH_*`/`DATABASE_URL` no ambiente.
 
-- [x] **Integrações com cache funcionando (migração da OpLab e do brapi concluída).** — ✅
-  A cadeia/IV/gregas e o preço do objeto vêm do COTAHIST/B3 (ingestão em job) +
-  Black-Scholes próprio; os fundamentos vêm da **bolsai** com frescor pela tabela
-  `fundamentos` (degradação para a linha antiga com aviso). As telas chamam os
-  proxies `app/api/*`. Coberto por `bolsai.test.ts`, `repositorio.test.ts`,
-  `routes.test.ts` e os testes de `lib/dados-opcoes/*` (cadeia, volatilidade, gregas).
-  *Ressalva:* os fundamentos dependem do `BOLSAI_API_KEY` — validar no smoke test; o
-  preço/cadeia (COTAHIST) e a resiliência estão testados.
+- [x] **Fontes de dados funcionando com cache.** — ✅ *(item reescrito pós-migração)*
+  Hoje as fontes são **COTAHIST/B3 + BCB-SGS + Black-Scholes próprio + bolsai** (não
+  mais brapi/OpLab):
+  - **Cadeia / IV / IV Rank / gregas:** COTAHIST/B3 ingerido em job + Black-Scholes
+    próprio (`lib/dados-opcoes/{cadeia,volatilidade,gregas}.ts`, `lib/options-math/black-scholes.ts`).
+  - **Taxa livre de risco:** BCB-SGS série 432 (`lib/integrations/bcb-sgs.ts`, com `cacheGetOrFetch`).
+  - **Preço do ativo-objeto (Bloco Técnico):** COTAHIST EOD (`acao_cotahist`, helper
+    `buscarCotacaoEodAtivo` em `lib/dados-opcoes/comum.ts`).
+  - **Fundamentos:** bolsai (`lib/integrations/bolsai.ts`), com frescor pela tabela
+    `fundamentos` (`obterFundamentos`, `lib/fundamentos/repositorio.ts`, TTL 24h,
+    degradação para a linha antiga com aviso).
+  Coberto por `bolsai.test.ts`, `repositorio.test.ts`, `routes.test.ts`,
+  `bcb-sgs.test.ts`, `b3-cotahist.test.ts` e `lib/dados-opcoes/*`. **Smoke ao vivo
+  19/06** (12 ativos da watchlist, fluxo `/api/ativo` real, sem mocks): preço EOD
+  **12/12**, fundamentos **12/12** (ver "Verificação pós-migração").
 
-- [x] **Montador calcula risco máx., ganho máx. e breakeven corretos (casos
-  conhecidos).** — ✅
-  Núcleo puro `lib/options-math` validado contra os valores do §18 em
-  `estruturas.test.ts` (travas débito/crédito, borboleta, condor, straddle/strangle
-  comprado/vendido, venda coberta) e `payoff.test.ts`.
+- [x] **Montador calcula risco máx., ganho máx. e breakeven corretos.** — ✅
+  `lib/options-math/{estruturas,payoff,analysis}.ts`, validado contra casos
+  conhecidos do §18 em `estruturas.test.ts`, `payoff.test.ts`, `analysis.test.ts`,
+  `black-scholes.test.ts` (pricing/IV/gregas).
 
 - [x] **Payoff coerente com os números.** — ✅
-  O gráfico (`grafico-payoff.tsx`, Recharts) consome a **mesma** `curva` do motor
-  (`curvaPayoff`) que gera risco/ganho/breakeven — uma só fonte da verdade.
+  `app/(app)/montador/grafico-payoff.tsx` (Recharts) consome os pontos de
+  `lib/options-math/payoff`; mesma fonte numérica dos rótulos de risco/ganho.
 
-- [x] **Risco máximo ANTES do ganho, com rótulo DEFINIDO/INDEFINIDO.** — ✅
-  No montador (passo de resumo), no ticket (`linhaRiscoMaximo` precede
-  `linhaGanhoMaximo`) e no book/histórico. Selo `RotuloRisco` (DEFINIDO/INDEFINIDO)
-  em destaque.
+- [x] **Risco máximo antes do ganho, com rótulo DEFINIDO/INDEFINIDO.** — ✅
+  `components/risco/rotulo-risco.tsx` + `semaforo.tsx`; ordem risco-antes-do-ganho
+  aplicada no montador/ticket/histórico. Coberto em `educativo.test.tsx`.
 
-- [x] **Regras de risco disparam alertas nos limites (5% / 10% / 20% / 30% / 5
-  dias úteis).** — ✅
-  `RISK_LIMITS` em `lib/risk-rules`: `definedRiskMaxFraction 0.05`,
+- [x] **Regras de risco disparam alertas nos limites (5% / 10% / 20% / 30% / 5 dias úteis).** — ✅
+  `lib/risk-rules/index.ts` (`RISK_LIMITS`: `definedRiskMaxFraction 0.05`,
   `undefinedRiskMaxFraction 0.1`, `concentrationPerUnderlying 0.2`,
-  `concentrationPerExpiry 0.3`, `expiryWarningBusinessDays 5`. Semáforo
-  verde/amarelo/vermelho com banda de alerta a 80%; coberto por `index.test.ts`.
-  Aplicado no montador, no dashboard (§8.1) e nos alertas de vencimento.
+  `concentrationPerExpiry 0.3`, `expiryWarningBusinessDays 5`), banda amarela em 80%.
+  Coberto por `lib/risk-rules/index.test.ts`.
 
-- [x] **Ticket no formato padrão e copiável.** — ✅
-  `lib/ticket` gera o formato do §11 (validações de vencimento/liquidez/eventos que
-  **bloqueiam** a cópia se faltar dado); `ticket-cliente.tsx` copia via
-  `navigator.clipboard` e persiste a posição no book.
+- [x] **Ticket gerado no formato padrão e copiável.** — ✅
+  `lib/ticket/index.ts` (+ `index.test.ts`); cópia via `navigator.clipboard.writeText`
+  em `app/(app)/ticket/ticket-cliente.tsx` e `historico-cliente.tsx`.
 
 - [x] **Termos técnicos com tooltip/glossário.** — ✅
-  `<TermoTecnico>` (tooltip + link) sobre o glossário único (`lib/glossario.ts`),
-  usado em todas as telas; tela `/glossario` lista tudo por categoria.
+  `<TermoTecnico>` (`components/educativo/termo-tecnico.tsx`) + `lib/glossario.ts`
+  (43 termos, incl. os novos **ROE/ROIC/ROA**). Integridade coberta em `educativo.test.tsx`.
 
 - [x] **Disclaimer "não é consultoria" visível.** — ✅
-  `DisclaimerBar` fixa no rodapé de **todo** o app (`AppShell`) e `DisclaimerNota`
-  reforçada nas telas de decisão (montador, ticket, análise).
+  `components/disclaimer.tsx` (usado na análise/montador) e na tela de login.
 
-## 5. Requisitos não-funcionais (§13)
+## Verificação específica pós-migração (além do §16)
 
-- **Segurança:** chaves só no servidor; app protegido por login mono-usuário. ✅ (ver §2)
-- **Privacidade:** book/tickets no Postgres do usuário (Neon). ✅
-- **Performance:** cache obrigatório das APIs; payoff/cálculos client-side ou em
-  Server Action. ✅
-- **Resiliência:** falha/cota degrada para cache com aviso; telas tratam DB/integração
-  indisponível sem quebrar. ✅
-- **Clareza/acessibilidade:** linguagem simples, tooltips, rótulos de risco. ✅
-- **Disclaimers:** visíveis e recorrentes. ✅
+- [x] **Nenhuma tela referencia DY / margem bruta / margem operacional / lucros por
+  trimestre / eventoProximo.** — ✅ (grep, não suposição)
+  `eventoProximo`: **zero** ocorrências. `dividend yield`: só um comentário no
+  bloco fundamentalista. `margemBruta`/`margemOperacional`/`lucrosPorTrimestre`
+  aparecem **apenas** como chaves inertes (`null`/`[]`) passadas ao contrato da lib
+  pura `FundamentosEntrada` — **nada é renderizado nem buscado** (a remoção desses
+  campos do tipo puro ficou fora do escopo da migração, pois `tendenciaLucros` é
+  função independente com testes próprios).
 
-## 6. Smoke test manual recomendado (pós-deploy, com credenciais)
+- [x] **Aviso de preço EOD visível na UI.** — ✅
+  `app/(app)/analise/bloco-tecnico.tsx:90` renderiza "Preço de fechamento de DD/MM —
+  confira a cotação atual na sua corretora antes de montar a operação." O bloco
+  fundamentalista também sinaliza a possível divergência de data-base dos múltiplos.
 
-1. Abrir a URL → redireciona para `/login`; entrar com `AUTH_USERNAME/PASSWORD` → cai
-   no dashboard com book vazio.
-2. `/analise` e `/cadeia`: buscar `PETR4` → cotação (brapi) e cadeia/IV/gregas
-   (COTAHIST, fechamento EOD) aparecem; a cotação tem cache (frescor "em cache") e
-   cortar a rede mostra o aviso de fallback.
-3. `/montador`: montar uma trava de alta → conferir risco/ganho/breakeven e o payoff;
-   gerar ticket → copiar → confirmar (entra no book e no histórico).
-4. `/configuracoes`: ajustar capital → ver os indicadores do dashboard recalcularem.
+- [x] **Mensagem neutra de calendário indisponível renderiza (não erro/lista vazia).** — ✅
+  `/api/calendario` responde `{ disponivel:false, motivo, fonteAlternativa }` tipado;
+  o bloco fundamentalista mostra a mensagem neutra. Coberto por
+  `bloco-fundamentalista.test.tsx` (assertion de que a mensagem aparece e que o
+  texto antigo de "nenhum provento" NÃO aparece).
 
-**Conclusão:** o MVP atende aos critérios do §16 e aos requisitos do §13 no nível de
-código, testes e build. Restam apenas as validações ao vivo (itens 1 e 2), que
-dependem de credenciais/Neon e devem ser confirmadas no smoke test após configurar as
-variáveis na Vercel.
+- [x] **Smoke ao vivo (12 ativos, bolsai + COTAHIST reais, fluxo `/api/ativo`).** — ✅
+  Executado em 19/06/2026 (pregão de fechamento 17/06). Preço EOD 12/12 e
+  fundamentos 12/12, todos `origem: rede`. Casos-limite corretos: MGLU3 margem 0,35%
+  (sem dupla conversão), ITSA4 margem 203,91, ROE/PL negativos para empresas com
+  prejuízo. Percentuais em pontos, conforme §6.4.
+
+## §13 — Requisitos não-funcionais
+
+- **Segurança:** única chave (`BOLSAI_API_KEY`) é server-only; COTAHIST/SGS públicos;
+  acesso protegido por login (`proxy.ts`). Nenhuma `NEXT_PUBLIC_*` com segredo;
+  componentes cliente usam `import type` para tipos das integrações. ✅
+- **Resiliência:** falha/cota degrada para cache (cadeia/IV/gregas via `cacheGetOrFetch`)
+  ou para a linha antiga de `fundamentos` com aviso; nunca quebra a tela. ✅
+- **Clareza/acessibilidade e disclaimers:** linguagem simples, tooltips, disclaimer
+  recorrente. ✅
+
+## Histórico de migrações deste documento
+
+Este checklist já passou por **duas trocas de fonte de dados**; o relatório foi
+revalidado do zero a cada uma:
+
+1. **OpLab → COTAHIST/B3 + BCB-SGS + Black-Scholes próprio** (cadeia, IV/gregas e
+   taxa). Decisão 2026-06-16.
+2. **brapi → bolsai + COTAHIST** (fundamentos via bolsai; preço do objeto via
+   COTAHIST EOD; proventos/resultados manuais; dividend yield removido do produto).
+   Passos 5.1–5.7, concluída em 2026-06-19. Ver `docs/migracao-fundamentos.md`.
+
+Os documentos das fontes antigas (`docs/apis/oplab.md`, `docs/apis/brapi.md`) ficam
+como **histórico** — não reintroduzir.
+
+## Veredito
+
+**MVP pronto para a Fase 2.** Todos os 9 critérios do §16 atendidos com evidência no
+código atual; portões verdes; sem regressões pós-migração. Única ressalva (não
+bloqueante, pré-existente): rotacionar os valores reais em `.env.example`.

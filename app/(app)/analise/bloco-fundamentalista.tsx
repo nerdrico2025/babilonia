@@ -19,7 +19,7 @@ import {
 import type { Fundamentos } from "@/lib/fundamentos/tipos";
 
 import { FrescorBadge, Indicador, LeituraIniciante } from "./analise-ui";
-import type { EventosIndisponivel, Frescor } from "./tipos";
+import type { Frescor } from "./tipos";
 
 // pt-BR → número, ou null se vazio/ inválido.
 function parseNum(s: string): number | null {

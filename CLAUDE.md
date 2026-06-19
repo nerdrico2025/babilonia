@@ -122,6 +122,10 @@ docs/             PRD, contratos de API (docs/apis/) e design (docs/design/)
 - Quantidades em **lotes/contratos**; preços em **BRL**; gregas/IV **calculadas**
   pelo `options-math` e armazenadas com o **timestamp do pregão (EOD)** que as
   originou (§7).
+- **NUNCA commitar valores reais em `.env.example`** — só placeholders óbvios (ex.:
+  `DATABASE_URL=postgresql://usuario:senha@host/banco`, `AUTH_SECRET=gere-com-openssl-rand-base64-32`).
+  Segredos reais vivem só no `.env.local` (que está no `.gitignore`). Um valor real
+  no `.env.example` é um vazamento — fica no histórico do git e exige rotação.
 
 ## Regras de risco/capital (§10) — referência rápida
 

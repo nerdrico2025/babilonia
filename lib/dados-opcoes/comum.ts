@@ -73,6 +73,62 @@ export async function buscarSpot(
 }
 
 /**
+ * Cotação EOD do ATIVO-OBJETO para o Bloco Técnico da tela de Análise (§8.2). O
+ * preço/variação/volume passam a vir do COTAHIST (EOD) — não mais de cotação ao
+ * vivo (de-para #1–4, docs/migracao-fundamentos.md):
+ *  - `preco`   = `preco_fechamento` (PREULT) do pregão MAIS RECENTE;
+ *  - `variacao`/`variacaoPercent` = derivados do fechamento do pregão ANTERIOR
+ *    (precisa de 2 pregões; `null` quando só há 1 — não inventa, §2.4);
+ *  - `volume`  = `quantidade_titulos` (QUATOT) do pregão mais recente;
+ *  - `dataPregao` = `trade_date` do fechamento (a tela CARIMBA "fechamento de DD/MM").
+ *
+ * Devolve `null` quando o ativo não tem NENHUM fechamento ingerido (fora da
+ * watchlist ou sem COTAHIST) — o chamador decide o fallback (a rota degrada p/ 503).
+ */
+export interface CotacaoEodAtivo {
+  ticker: string;
+  preco: number;
+  variacao: number | null;
+  variacaoPercent: number | null;
+  volume: number | null;
+  dataPregao: Date;
+}
+
+export async function buscarCotacaoEodAtivo(
+  ticker: string,
+  db: Db = getDb(),
+): Promise<CotacaoEodAtivo | null> {
+  const linhas = await db
+    .select({
+      tradeDate: acaoCotahist.tradeDate,
+      fechamento: acaoCotahist.precoFechamento,
+      quantidade: acaoCotahist.quantidadeTitulos,
+    })
+    .from(acaoCotahist)
+    .where(eq(acaoCotahist.ticker, ticker.toUpperCase()))
+    .orderBy(desc(acaoCotahist.tradeDate))
+    .limit(2);
+
+  const atual = linhas[0];
+  if (!atual) return null;
+
+  const preco = Number(atual.fechamento);
+  const anterior = linhas[1] ? Number(linhas[1].fechamento) : null;
+  const variacao = anterior == null ? null : preco - anterior;
+  const variacaoPercent =
+    anterior == null || anterior === 0 ? null : ((preco - anterior) / anterior) * 100;
+
+  return {
+    ticker: ticker.toUpperCase(),
+    preco,
+    variacao,
+    variacaoPercent,
+    volume: atual.quantidade == null ? null : Number(atual.quantidade),
+    dataPregao: atual.tradeDate,
+  };
+}
+
+/**
  * SELIC CONTÍNUA (o `r` que o Black-Scholes espera — `ln(1 + Selic/100)`, §18.1)
  * vigente no pregão `data`, via BCB-SGS série 432.
  *

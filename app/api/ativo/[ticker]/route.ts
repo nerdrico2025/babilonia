@@ -1,23 +1,28 @@
 /**
- * GET /api/ativo/{ticker} — cotação + fundamentos do ativo-objeto (brapi, §6.1).
+ * GET /api/ativo/{ticker} — preço (COTAHIST/EOD) + fundamentos (bolsai) do ativo.
  *
- * Proxy do §5.1: a tela NUNCA chama o brapi direto — passa por aqui, que esconde
- * o `BRAPI_TOKEN` (server-only) e usa a camada `lib/integrations` (com cache).
- * Cada bloco vem com seu metadado de frescor (§6.3).
+ * Proxy do §5.1: a tela NUNCA chama as fontes direto. Duas fontes, DUAS datas de
+ * referência distintas — por isso o frescor é por bloco:
+ *  - `preco`: fechamento (EOD) do ativo-objeto em `acao_cotahist` + variação
+ *    derivada do pregão anterior (§6.2). Frescor = data-base do pregão.
+ *  - `fundamentos`: múltiplos/retornos da bolsai via `obterFundamentos` (frescor
+ *    pela tabela `fundamentos`, 5.4). Best-effort: se faltar, degrada para `null`.
  *
- * Fundamentos exigem plano Startup do brapi; no plano Free os campos voltam
- * `null` (a integração não quebra). Se o brapi cair sem cache, a cotação (dado
- * essencial) derruba a rota com 503; os fundamentos degradam para `null`.
+ * Preço EOD é o dado ESSENCIAL da tela (Bloco Técnico): sem fechamento ingerido
+ * (fora da watchlist / sem COTAHIST) → 503. Fundamentos NÃO derrubam a rota.
  */
-import { getCotacao, getFundamentos } from "@/lib/integrations/brapi";
+import { buscarCotacaoEodAtivo } from "@/lib/dados-opcoes/comum";
+import { obterFundamentos } from "@/lib/fundamentos/repositorio";
 
 import {
   erroIntegracao,
   exigirSessao,
   frescorDe,
+  frescorEod,
   lerForcar,
   tickerSchema,
   erroParametro,
+  type Frescor,
 } from "../../_lib/http";
 
 export async function GET(
@@ -28,7 +33,7 @@ export async function GET(
   const negado = await exigirSessao();
   if (negado) return negado;
 
-  // 2) Valida o parâmetro de entrada (Zod) antes de gastar chamada externa.
+  // 2) Valida o parâmetro de entrada (Zod) antes de tocar no banco/rede.
   const { ticker: bruto } = await ctx.params;
   const parsed = tickerSchema.safeParse(bruto);
   if (!parsed.success) {
@@ -37,34 +42,51 @@ export async function GET(
   const ticker = parsed.data;
   const forcar = lerForcar(request.url);
 
-  // 3) Camada de integração (com cache). Cotação é essencial; fundamentos são
-  //    "best-effort" (plano/cobertura variam) — não derrubam a rota.
   try {
-    const cotacao = await getCotacao(ticker, { forcar });
+    // 3) Preço EOD (acao_cotahist) é essencial. Sem fechamento → 503.
+    const preco = await buscarCotacaoEodAtivo(ticker);
+    if (preco === null) {
+      return Response.json(
+        {
+          erro: "sem dados de fechamento para este ativo",
+          mensagem:
+            "Ainda não há fechamento (COTAHIST) ingerido para este ativo. " +
+            "Ele pode estar fora da watchlist ou sem dados de pregão.",
+        },
+        { status: 503 },
+      );
+    }
 
+    // 4) Fundamentos (bolsai) são best-effort — não derrubam a tela.
     let fundamentos = null;
-    let frescorFundamentos = null;
+    let frescorFundamentos: Frescor | null = null;
     try {
-      const r = await getFundamentos(ticker, { forcar });
+      const r = await obterFundamentos(ticker, { forcarAtualizacao: forcar });
       fundamentos = r.dado;
       frescorFundamentos = frescorDe(r);
     } catch {
-      // Fundamentos indisponíveis (sem plano/sem cache) não quebram a tela.
+      // Indisponíveis (sem cobertura/sem linha) não quebram a tela (§6.3).
       fundamentos = null;
       frescorFundamentos = null;
     }
 
     return Response.json({
       ticker,
-      cotacao: cotacao.dado,
+      preco: {
+        preco: preco.preco,
+        variacao: preco.variacao,
+        variacaoPercent: preco.variacaoPercent,
+        volume: preco.volume,
+        dataPregao: preco.dataPregao.toISOString(),
+      },
       fundamentos,
       frescor: {
-        cotacao: frescorDe(cotacao),
+        preco: frescorEod(preco.dataPregao),
         fundamentos: frescorFundamentos,
       },
     });
   } catch (e) {
-    // Cotação sem cache disponível: o dado essencial faltou (§6.3).
+    // Falha de banco/rede no preço essencial (§6.3).
     return erroIntegracao(e);
   }
 }

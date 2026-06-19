@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { LineChart } from "lucide-react";
+import { LineChart, Info } from "lucide-react";
 
 import { TermoTecnico } from "@/components/educativo/termo-tecnico";
 import {
@@ -13,22 +13,29 @@ import {
 } from "@/components/ui/card";
 import { formatPreco } from "@/lib/format";
 import { analisarTecnico, parseSerie } from "@/lib/analise/tecnico";
-import type { BrapiCotacao } from "@/lib/integrations/brapi";
 
 import { AreaColar, FrescorBadge, fmtNum, Indicador, LeituraIniciante } from "./analise-ui";
-import type { Frescor } from "./tipos";
+import type { Frescor, PrecoAtivoEod } from "./tipos";
+
+/** Data ISO → "DD/MM/AAAA" (UTC, para não escorregar de dia por fuso). */
+function fmtDataPregao(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }).format(d);
+}
 
 /**
- * Bloco 1 — Técnico (§8.2). A cotação ao vivo (preço/variação/volume) vem da
- * brapi; os indicadores (médias, RSI, MACD, suporte/resistência) são calculados
- * a partir do HISTÓRICO COLADO pelo usuário (o brapi Free não fornece histórico,
- * §6.1, §2.4). Encerra com a leitura de iniciante (§9).
+ * Bloco 1 — Técnico (§8.2). O preço/variação/volume vêm do COTAHIST (fechamento
+ * EOD), não de cotação ao vivo — por isso o aviso datado abaixo (§6.2): o usuário
+ * confirma a cotação atual na corretora antes de montar. Os indicadores (médias,
+ * RSI, MACD, suporte/resistência) seguem calculados do HISTÓRICO COLADO (§2.4).
  */
 export function BlocoTecnico({
-  cotacao,
+  preco,
   frescor,
 }: {
-  cotacao: BrapiCotacao;
+  preco: PrecoAtivoEod;
   frescor: Frescor;
 }) {
   const [closesText, setClosesText] = useState("");
@@ -39,11 +46,11 @@ export function BlocoTecnico({
     const volumes = parseSerie(volumesText);
     return analisarTecnico(closes, {
       volumes: volumes.length > 0 ? volumes : undefined,
-      precoAtual: cotacao.preco,
+      precoAtual: preco.preco,
     });
-  }, [closesText, volumesText, cotacao.preco]);
+  }, [closesText, volumesText, preco.preco]);
 
-  const subiu = cotacao.variacao >= 0;
+  const subiu = (preco.variacao ?? 0) >= 0;
 
   return (
     <Card>
@@ -58,18 +65,30 @@ export function BlocoTecnico({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {/* Cotação ao vivo (brapi). */}
+        {/* Preço de FECHAMENTO (COTAHIST/EOD). */}
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <span className="font-heading text-2xl font-semibold tabular">
-            {formatPreco(cotacao.preco)}
+            {formatPreco(preco.preco)}
           </span>
-          <span className={subiu ? "text-risco-ok" : "text-risco-perigo"}>
-            {subiu ? "+" : ""}
-            {fmtNum(cotacao.variacao)} ({fmtNum(cotacao.variacaoPercent)}%)
-          </span>
+          {preco.variacao != null && (
+            <span className={subiu ? "text-risco-ok" : "text-risco-perigo"}>
+              {subiu ? "+" : ""}
+              {fmtNum(preco.variacao)}
+              {preco.variacaoPercent != null ? ` (${fmtNum(preco.variacaoPercent)}%)` : ""}
+            </span>
+          )}
           <span className="text-sm text-muted-foreground">
-            <TermoTecnico termo="volume">Volume</TermoTecnico> do dia:{" "}
-            {cotacao.volume.toLocaleString("pt-BR")}
+            <TermoTecnico termo="volume">Volume</TermoTecnico> do pregão:{" "}
+            {preco.volume != null ? preco.volume.toLocaleString("pt-BR") : "—"}
+          </span>
+        </div>
+
+        {/* Aviso EOD (§6.2): o dado é do fechamento, não ao vivo. */}
+        <div className="flex items-start gap-2 rounded-lg border border-risco-alerta/40 bg-risco-alerta/10 px-3 py-2 text-sm text-risco-alerta">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            Preço de fechamento de {fmtDataPregao(preco.dataPregao)} — confira a cotação atual
+            na sua corretora antes de montar a operação.
           </span>
         </div>
 

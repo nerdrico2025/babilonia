@@ -14,11 +14,14 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 
 vi.mock("@/lib/integrations/brapi", () => ({
-  getCotacao: vi.fn(),
-  getFundamentos: vi.fn(),
   getCalendarioProventos: vi.fn(),
   getCalendarioResultados: vi.fn(),
 }));
+
+// /api/ativo agora consome o preço EOD (acao_cotahist) + fundamentos (bolsai via
+// repositório de frescor) — não mais o brapi.
+vi.mock("@/lib/dados-opcoes/comum", () => ({ buscarCotacaoEodAtivo: vi.fn() }));
+vi.mock("@/lib/fundamentos/repositorio", () => ({ obterFundamentos: vi.fn() }));
 
 // Camada de dados própria (COTAHIST) que as rotas /api/cadeia e /api/gregas consomem.
 vi.mock("@/lib/dados-opcoes/cadeia", () => ({ getCadeiaCotahist: vi.fn() }));
@@ -27,6 +30,8 @@ vi.mock("@/lib/dados-opcoes/gregas", () => ({ getGregasCotahist: vi.fn() }));
 
 import { auth } from "@/auth";
 import * as brapi from "@/lib/integrations/brapi";
+import * as dadosComum from "@/lib/dados-opcoes/comum";
+import * as repoFund from "@/lib/fundamentos/repositorio";
 import * as dadosCadeia from "@/lib/dados-opcoes/cadeia";
 import * as dadosVol from "@/lib/dados-opcoes/volatilidade";
 import * as dadosGregas from "@/lib/dados-opcoes/gregas";
@@ -69,13 +74,27 @@ beforeEach(() => {
 
 // ── /api/ativo/{ticker} ──────────────────────────────────────────────────────
 
-describe("GET /api/ativo/{ticker} — cotação + fundamentos (brapi)", () => {
-  it("devolve cotação, fundamentos e frescor de cada bloco", async () => {
-    vi.mocked(brapi.getCotacao).mockResolvedValue(
-      resultado({ ticker: "PETR4", preco: 36.65 }) as never,
-    );
-    vi.mocked(brapi.getFundamentos).mockResolvedValue(
-      resultado({ ticker: "PETR4", precoLucro: 6.09 }, { origem: "cache" }) as never,
+describe("GET /api/ativo/{ticker} — preço EOD (COTAHIST) + fundamentos (bolsai)", () => {
+  // Data-base do fechamento (EOD) que a rota carimba no frescor do preço.
+  const PREGAO = new Date("2026-06-18T00:00:00.000Z");
+
+  /** Cotação EOD padrão (acao_cotahist) mockada. */
+  function precoEod(over: Record<string, unknown> = {}) {
+    return {
+      ticker: "PETR4",
+      preco: 38.85,
+      variacao: 0.4,
+      variacaoPercent: 1.04,
+      volume: 1_234_567,
+      dataPregao: PREGAO,
+      ...over,
+    };
+  }
+
+  it("devolve preço EOD, fundamentos e frescor de cada bloco (duas datas)", async () => {
+    vi.mocked(dadosComum.buscarCotacaoEodAtivo).mockResolvedValue(precoEod() as never);
+    vi.mocked(repoFund.obterFundamentos).mockResolvedValue(
+      resultado({ ticker: "PETR4", precoLucro: 4.65, roe: 24.17 }, { origem: "cache" }) as never,
     );
 
     const resp = await getAtivo(
@@ -86,31 +105,50 @@ describe("GET /api/ativo/{ticker} — cotação + fundamentos (brapi)", () => {
     const body = await resp.json();
 
     expect(body.ticker).toBe("PETR4"); // normalizado (uppercase)
-    expect(body.cotacao.preco).toBe(36.65);
-    expect(body.fundamentos.precoLucro).toBe(6.09);
-    // Frescor (§6.3): origem + timestamp ISO da fonte.
-    expect(body.frescor.cotacao.origem).toBe("rede");
-    expect(body.frescor.cotacao.geradoEm).toBe(GERADO_EM.toISOString());
+    expect(body.preco.preco).toBe(38.85);
+    expect(body.preco.variacaoPercent).toBe(1.04);
+    expect(body.fundamentos.precoLucro).toBe(4.65);
+    expect(body.fundamentos.roe).toBe(24.17);
+    // Frescor por fonte (§6.3): preço = data-base EOD; fundamentos = tabela (5.4).
+    expect(body.frescor.preco.geradoEm).toBe(PREGAO.toISOString());
+    expect(body.frescor.preco.desatualizado).toBe(false);
     expect(body.frescor.fundamentos.origem).toBe("cache");
-    // Usou a camada de integração (proxy), não a API externa direto.
-    expect(brapi.getCotacao).toHaveBeenCalledWith("PETR4", { forcar: false });
+    expect(body.frescor.fundamentos.geradoEm).toBe(GERADO_EM.toISOString());
+    // Não força atualização por padrão.
+    expect(repoFund.obterFundamentos).toHaveBeenCalledWith("PETR4", { forcarAtualizacao: false });
   });
 
-  it("propaga o flag ?forcar=true para a camada de cache", async () => {
-    vi.mocked(brapi.getCotacao).mockResolvedValue(resultado({ ticker: "PETR4" }) as never);
-    vi.mocked(brapi.getFundamentos).mockResolvedValue(resultado({}) as never);
+  it("propaga ?forcar=true como forcarAtualizacao para os fundamentos", async () => {
+    vi.mocked(dadosComum.buscarCotacaoEodAtivo).mockResolvedValue(precoEod() as never);
+    vi.mocked(repoFund.obterFundamentos).mockResolvedValue(resultado({ ticker: "PETR4" }) as never);
 
     await getAtivo(
       new Request("http://localhost/api/ativo/PETR4?forcar=true"),
       ctx({ ticker: "PETR4" }),
     );
-    expect(brapi.getCotacao).toHaveBeenCalledWith("PETR4", { forcar: true });
+    expect(repoFund.obterFundamentos).toHaveBeenCalledWith("PETR4", { forcarAtualizacao: true });
+  });
+
+  it("variação null (só 1 pregão) é repassada sem quebrar", async () => {
+    vi.mocked(dadosComum.buscarCotacaoEodAtivo).mockResolvedValue(
+      precoEod({ variacao: null, variacaoPercent: null }) as never,
+    );
+    vi.mocked(repoFund.obterFundamentos).mockResolvedValue(resultado({ ticker: "PETR4" }) as never);
+
+    const resp = await getAtivo(
+      new Request("http://localhost/api/ativo/PETR4"),
+      ctx({ ticker: "PETR4" }),
+    );
+    expect(resp.status).toBe(200);
+    const body = await resp.json();
+    expect(body.preco.variacao).toBeNull();
+    expect(body.preco.variacaoPercent).toBeNull();
   });
 
   it("fundamentos indisponíveis degradam para null sem derrubar a rota", async () => {
-    vi.mocked(brapi.getCotacao).mockResolvedValue(resultado({ ticker: "PETR4", preco: 1 }) as never);
-    vi.mocked(brapi.getFundamentos).mockRejectedValue(
-      new IntegracaoIndisponivelError("brapi:fundamentos:PETR4", new Error("x")),
+    vi.mocked(dadosComum.buscarCotacaoEodAtivo).mockResolvedValue(precoEod() as never);
+    vi.mocked(repoFund.obterFundamentos).mockRejectedValue(
+      new IntegracaoIndisponivelError("fundamentos:PETR4", new Error("x")),
     );
 
     const resp = await getAtivo(
@@ -119,14 +157,13 @@ describe("GET /api/ativo/{ticker} — cotação + fundamentos (brapi)", () => {
     );
     expect(resp.status).toBe(200);
     const body = await resp.json();
+    expect(body.preco.preco).toBe(38.85); // preço (essencial) segue
     expect(body.fundamentos).toBeNull();
     expect(body.frescor.fundamentos).toBeNull();
   });
 
-  it("cotação sem cache (IntegracaoIndisponivelError) → 503", async () => {
-    vi.mocked(brapi.getCotacao).mockRejectedValue(
-      new IntegracaoIndisponivelError("brapi:quote:PETR4", new Error("falhou")),
-    );
+  it("ativo sem fechamento ingerido (preço null) → 503", async () => {
+    vi.mocked(dadosComum.buscarCotacaoEodAtivo).mockResolvedValue(null as never);
 
     const resp = await getAtivo(
       new Request("http://localhost/api/ativo/PETR4"),
@@ -134,19 +171,21 @@ describe("GET /api/ativo/{ticker} — cotação + fundamentos (brapi)", () => {
     );
     expect(resp.status).toBe(503);
     const body = await resp.json();
-    expect(body.erro).toContain("indisponível");
+    expect(body.erro).toMatch(/sem dados de fechamento/i);
+    // Sem preço essencial, nem tenta os fundamentos.
+    expect(repoFund.obterFundamentos).not.toHaveBeenCalled();
   });
 
-  it("ticker inválido → 400 (Zod), sem chamar a integração", async () => {
+  it("ticker inválido → 400 (Zod), sem tocar nas fontes", async () => {
     const resp = await getAtivo(
       new Request("http://localhost/api/ativo/!!!"),
       ctx({ ticker: "!!!" }),
     );
     expect(resp.status).toBe(400);
-    expect(brapi.getCotacao).not.toHaveBeenCalled();
+    expect(dadosComum.buscarCotacaoEodAtivo).not.toHaveBeenCalled();
   });
 
-  it("sem sessão → 401, sem chamar a integração", async () => {
+  it("sem sessão → 401, sem tocar nas fontes", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
 
     const resp = await getAtivo(
@@ -154,7 +193,7 @@ describe("GET /api/ativo/{ticker} — cotação + fundamentos (brapi)", () => {
       ctx({ ticker: "PETR4" }),
     );
     expect(resp.status).toBe(401);
-    expect(brapi.getCotacao).not.toHaveBeenCalled();
+    expect(dadosComum.buscarCotacaoEodAtivo).not.toHaveBeenCalled();
   });
 });
 

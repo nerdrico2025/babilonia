@@ -110,9 +110,11 @@ export function lerFundamentos(f: FundamentosEntrada): AnaliseFundamentos {
     );
   }
   if (f.margemLiquida != null) {
-    leitura.push(
-      `Margem líquida de ${pctFlex(f.margemLiquida)}: parte da receita que sobra como lucro.`,
-    );
+    // Margem em PONTOS percentuais (a fonte de fundamentos entrega assim, §6.4):
+    // formata direto, sem a heurística de ×100 do `pctFlex` (que distorceria
+    // margens < 1%, ex.: 0,35 viraria 35%).
+    const margem = `${f.margemLiquida.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+    leitura.push(`Margem líquida de ${margem}: parte da receita que sobra como lucro.`);
   }
   if (f.dividendYield != null) {
     leitura.push(

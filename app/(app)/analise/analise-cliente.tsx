@@ -45,7 +45,6 @@ export function AnaliseCliente() {
   const [dadosAtivo, setDadosAtivo] = useState<RespostaAtivo | null>(null);
   const [dadosCadeia, setDadosCadeia] = useState<RespostaCadeia | null>(null);
   const [dadosCalendario, setDadosCalendario] = useState<RespostaCalendario | null>(null);
-  const [proventoFuturo, setProventoFuturo] = useState(false);
 
   async function buscar(e: React.FormEvent) {
     e.preventDefault();
@@ -75,18 +74,7 @@ export function AnaliseCliente() {
     setDadosAtivo(a);
     setDadosCadeia(c);
     setDadosCalendario(cal);
-    // Há provento com pagamento futuro? (calculado aqui, fora do render).
-    const agora = Date.now();
-    setProventoFuturo(
-      cal?.proventos.some(
-        (p) => p.dataPagamento != null && new Date(p.dataPagamento).getTime() >= agora,
-      ) ?? false,
-    );
   }
-
-  // Evento próximo (provento futuro) reforça o alerta da leitura de volatilidade.
-  // Calculado no submit (não no render, que deve ser puro) e guardado em estado.
-  const eventoProximo = proventoFuturo;
 
   return (
     <div className="flex flex-col gap-6">
@@ -130,20 +118,19 @@ export function AnaliseCliente() {
 
       {dadosAtivo && (
         <>
-          <BlocoTecnico cotacao={dadosAtivo.cotacao} frescor={dadosAtivo.frescor.cotacao} />
+          <BlocoTecnico preco={dadosAtivo.preco} frescor={dadosAtivo.frescor.preco} />
 
           <BlocoFundamentalista
             fundamentos={dadosAtivo.fundamentos}
             proventos={dadosCalendario?.proventos ?? []}
             resultadosInfo={dadosCalendario?.resultados ?? RESULTADOS_PADRAO}
             frescorFundamentos={dadosAtivo.frescor.fundamentos}
-            frescorProventos={dadosCalendario?.frescor.proventos ?? dadosAtivo.frescor.cotacao}
+            frescorProventos={dadosCalendario?.frescor.proventos ?? dadosAtivo.frescor.preco}
           />
 
           <BlocoVolatilidade
             ivAtual={dadosCadeia?.cadeia.ivAtual ?? null}
             volatilidade={dadosCadeia?.volatilidade ?? null}
-            eventoProximo={eventoProximo}
             frescor={dadosCadeia?.frescor.volatilidade ?? null}
           />
         </>

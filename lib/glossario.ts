@@ -250,6 +250,30 @@ export const GLOSSARIO: readonly Termo[] = [
       "O dividend yield mostra quanto a empresa distribuiu em proventos no último período frente ao preço atual. Yield alto pode ser atrativo para renda, mas também pode refletir queda do preço — olhe junto com a saúde dos lucros.",
     categoria: "Fundamentos",
   },
+  {
+    slug: "roe",
+    termo: "ROE (Retorno sobre o Patrimônio)",
+    curto: "Quanto de lucro a empresa gera sobre o dinheiro dos acionistas, ao ano.",
+    longo:
+      "O ROE (Return on Equity) divide o lucro líquido pelo patrimônio líquido. Mostra a eficiência da empresa em transformar o capital dos sócios em lucro. ROE alto e consistente costuma indicar negócio rentável, mas compare ao setor e veja se não vem de endividamento excessivo.",
+    categoria: "Fundamentos",
+  },
+  {
+    slug: "roic",
+    termo: "ROIC (Retorno sobre o Capital Investido)",
+    curto: "Retorno que a empresa gera sobre TODO o capital investido (sócios + dívida).",
+    longo:
+      "O ROIC (Return on Invested Capital) mede o retorno sobre o capital total empregado no negócio, incluindo dívida. Comparado ao custo desse capital, indica se a empresa cria ou destrói valor. É um dos retornos mais usados para avaliar qualidade operacional.",
+    categoria: "Fundamentos",
+  },
+  {
+    slug: "roa",
+    termo: "ROA (Retorno sobre os Ativos)",
+    curto: "Quanto de lucro a empresa gera sobre o total de ativos que possui.",
+    longo:
+      "O ROA (Return on Assets) divide o lucro líquido pelo total de ativos. Mostra a eficiência em usar tudo o que a empresa tem (máquinas, estoques, caixa) para gerar lucro. Útil para comparar empresas do mesmo setor com estruturas de ativos parecidas.",
+    categoria: "Fundamentos",
+  },
 
   // ── Estruturas ─────────────────────────────────────────────────────────────
   {

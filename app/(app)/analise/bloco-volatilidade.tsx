@@ -39,12 +39,10 @@ function fmtPctNum(v: number | null): string {
 export function BlocoVolatilidade({
   ivAtual,
   volatilidade,
-  eventoProximo,
   frescor,
 }: {
   ivAtual: number | null;
   volatilidade: VolatilidadeAtivo | null;
-  eventoProximo: boolean;
   frescor: Frescor | null;
 }) {
   const [ivPut, setIvPut] = useState("");
@@ -52,15 +50,12 @@ export function BlocoVolatilidade({
 
   const analise = useMemo(
     () =>
-      lerVolatilidade(
-        {
-          ivAtual: ivAtual ?? volatilidade?.ivAtual ?? null,
-          ivRank: volatilidade?.ivRank1a ?? null,
-          ivPercentil: volatilidade?.ivPercentil1a ?? null,
-        },
-        { eventoProximo },
-      ),
-    [ivAtual, volatilidade, eventoProximo],
+      lerVolatilidade({
+        ivAtual: ivAtual ?? volatilidade?.ivAtual ?? null,
+        ivRank: volatilidade?.ivRank1a ?? null,
+        ivPercentil: volatilidade?.ivPercentil1a ?? null,
+      }),
+    [ivAtual, volatilidade],
   );
 
   const put = parseNum(ivPut);

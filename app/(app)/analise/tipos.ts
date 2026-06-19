@@ -5,11 +5,8 @@
  * não puxa código server-only para o cliente).
  */
 
-import type {
-  BrapiCotacao,
-  BrapiFundamentos,
-  BrapiProvento,
-} from "@/lib/integrations/brapi";
+import type { Fundamentos } from "@/lib/fundamentos/tipos";
+import type { BrapiProvento } from "@/lib/integrations/brapi";
 import type { CadeiaOpcoes, VolatilidadeAtivo } from "@/lib/opcoes/tipos";
 
 /** Metadado de frescor (§6.3), espelhando `Frescor` do Route Handler. */
@@ -21,12 +18,26 @@ export interface Frescor {
   aviso?: string;
 }
 
-/** GET /api/ativo/{ticker}. */
+/**
+ * Preço EOD do ativo-objeto (Bloco Técnico) — vem de `acao_cotahist` (COTAHIST),
+ * não mais de cotação ao vivo. `variacao`/`variacaoPercent`/`volume` podem ser
+ * `null` (ex.: só 1 pregão disponível para derivar a variação). `dataPregao` é o
+ * fechamento (ISO) que a tela carimba ("fechamento de DD/MM").
+ */
+export interface PrecoAtivoEod {
+  preco: number;
+  variacao: number | null;
+  variacaoPercent: number | null;
+  volume: number | null;
+  dataPregao: string;
+}
+
+/** GET /api/ativo/{ticker}. Duas fontes → dois frescores (preço EOD × fundamentos). */
 export interface RespostaAtivo {
   ticker: string;
-  cotacao: BrapiCotacao;
-  fundamentos: BrapiFundamentos | null;
-  frescor: { cotacao: Frescor; fundamentos: Frescor | null };
+  preco: PrecoAtivoEod;
+  fundamentos: Fundamentos | null;
+  frescor: { preco: Frescor; fundamentos: Frescor | null };
 }
 
 /** GET /api/cadeia/{ativo} (aqui só usamos IV/volatilidade). */

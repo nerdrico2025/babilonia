@@ -124,7 +124,11 @@ export function AnaliseCliente() {
 
       {dadosAtivo && (
         <>
-          <BlocoTecnico preco={dadosAtivo.preco} frescor={dadosAtivo.frescor.preco} />
+          <BlocoTecnico
+            preco={dadosAtivo.preco}
+            tecnica={dadosAtivo.tecnica}
+            frescor={dadosAtivo.frescor.preco}
+          />
 
           <BlocoFundamentalista
             fundamentos={dadosAtivo.fundamentos}

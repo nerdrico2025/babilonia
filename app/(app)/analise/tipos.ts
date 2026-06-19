@@ -5,6 +5,7 @@
  * não puxa código server-only para o cliente).
  */
 
+import type { AnaliseTecnica } from "@/lib/analise-tecnica/tipos";
 import type { Fundamentos } from "@/lib/fundamentos/tipos";
 import type { CadeiaOpcoes, VolatilidadeAtivo } from "@/lib/opcoes/tipos";
 
@@ -31,11 +32,18 @@ export interface PrecoAtivoEod {
   dataPregao: string;
 }
 
-/** GET /api/ativo/{ticker}. Duas fontes → dois frescores (preço EOD × fundamentos). */
+/**
+ * GET /api/ativo/{ticker}. Reúne preço EOD (COTAHIST), fundamentos (bolsai) e os
+ * indicadores TÉCNICOS (analisarTecnico/T3, calculados sobre o MESMO fechamento
+ * EOD). `tecnica` é `null` quando não há histórico suficiente — a tela mostra a
+ * mensagem neutra, não esconde a seção. O frescor da técnica é o mesmo do preço
+ * (mesma data-base EOD), por isso não há um campo de frescor separado.
+ */
 export interface RespostaAtivo {
   ticker: string;
   preco: PrecoAtivoEod;
   fundamentos: Fundamentos | null;
+  tecnica: AnaliseTecnica | null;
   frescor: { preco: Frescor; fundamentos: Frescor | null };
 }
 

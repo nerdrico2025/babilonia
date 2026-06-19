@@ -11,6 +11,7 @@
  * Preço EOD é o dado ESSENCIAL da tela (Bloco Técnico): sem fechamento ingerido
  * (fora da watchlist / sem COTAHIST) → 503. Fundamentos NÃO derrubam a rota.
  */
+import { analisarTecnico } from "@/lib/analise-tecnica/analise-completa";
 import { buscarCotacaoEodAtivo } from "@/lib/dados-opcoes/comum";
 import { obterFundamentos } from "@/lib/fundamentos/repositorio";
 
@@ -70,6 +71,16 @@ export async function GET(
       frescorFundamentos = null;
     }
 
+    // 5) Indicadores técnicos (T3) — best-effort também. Calculados sobre o MESMO
+    // fechamento EOD do bloco de preço; `null` quando falta histórico suficiente
+    // (ativo novo/sem ingestão). Nunca derrubam a tela.
+    let tecnica = null;
+    try {
+      tecnica = await analisarTecnico(ticker);
+    } catch {
+      tecnica = null;
+    }
+
     return Response.json({
       ticker,
       preco: {
@@ -80,6 +91,7 @@ export async function GET(
         dataPregao: preco.dataPregao.toISOString(),
       },
       fundamentos,
+      tecnica,
       frescor: {
         preco: frescorEod(preco.dataPregao),
         fundamentos: frescorFundamentos,

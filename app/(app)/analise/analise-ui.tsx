@@ -43,11 +43,11 @@ export function FrescorBadge({ frescor }: { frescor: Frescor | null }) {
 }
 
 /**
- * Callout que encerra cada bloco (§8.2): a "leitura de iniciante". Em linguagem
- * simples e SEM recomendação (§9) — só descreve o que os números sugerem.
+ * Caixa-base da "leitura de iniciante" (§8.2/§9): mesmo visual dourado, mas aceita
+ * conteúdo arbitrário (ReactNode) — assim a prosa pode embrulhar jargão em
+ * `<TermoTecnico>` inline, sem perder o estilo. SEM recomendação: só descreve.
  */
-export function LeituraIniciante({ linhas }: { linhas: string[] }) {
-  if (linhas.length === 0) return null;
+export function LeituraBox({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-1 flex gap-2.5 rounded-lg border border-dourado/40 bg-dourado/10 px-3.5 py-3">
       <Lightbulb className="mt-0.5 size-4 shrink-0 text-dourado" aria-hidden />
@@ -55,11 +55,24 @@ export function LeituraIniciante({ linhas }: { linhas: string[] }) {
         <p className="text-[11px] font-semibold tracking-wide text-foreground/70 uppercase">
           Leitura para iniciante
         </p>
-        {linhas.map((l, i) => (
-          <p key={i}>{l}</p>
-        ))}
+        {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * Callout que encerra cada bloco (§8.2): a "leitura de iniciante" a partir de
+ * linhas de texto simples. Em linguagem simples e SEM recomendação (§9).
+ */
+export function LeituraIniciante({ linhas }: { linhas: string[] }) {
+  if (linhas.length === 0) return null;
+  return (
+    <LeituraBox>
+      {linhas.map((l, i) => (
+        <p key={i}>{l}</p>
+      ))}
+    </LeituraBox>
   );
 }
 

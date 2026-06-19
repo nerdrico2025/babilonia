@@ -201,6 +201,22 @@ export const GLOSSARIO: readonly Termo[] = [
     categoria: "Técnico",
   },
   {
+    slug: "momentum",
+    termo: "Momentum",
+    curto: "A força e a direção de um movimento de preço — se ele está ganhando ou perdendo fôlego.",
+    longo:
+      "Momentum é a 'embalagem' do movimento: mede se o preço está acelerando ou desacelerando numa direção. Indicadores como o MACD tentam capturar esse fôlego — momentum comprador quando a alta ganha força, vendedor quando a queda ganha força. É uma leitura de contexto, não um sinal de entrada.",
+    categoria: "Técnico",
+  },
+  {
+    slug: "cruzamento-medias",
+    termo: "Cruzamento de médias",
+    curto: "Quando uma média curta passa acima (alta) ou abaixo (baixa) de uma média mais longa.",
+    longo:
+      "Um cruzamento de alta ocorre quando uma média curta (ex.: 9 ou 50 pregões) passa acima de uma mais longa (21 ou 200) — sinal de que os preços recentes superaram a referência mais lenta. O de baixa é o contrário. São observações de tendência muito acompanhadas, mas que falham com frequência — nunca uma garantia.",
+    categoria: "Técnico",
+  },
+  {
     slug: "volume",
     termo: "Volume",
     curto: "Quantidade negociada num período — mede a participação por trás do movimento.",

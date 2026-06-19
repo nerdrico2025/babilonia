@@ -189,7 +189,7 @@ describe("GET /api/cadeia/{ativo} — cadeia + IV/IV Rank (COTAHIST)", () => {
     expect(body.frescor.cadeia.geradoEm).toBe(ASOF.toISOString());
     expect(body.frescor.cadeia.desatualizado).toBe(false);
     expect(body.frescor.volatilidade.geradoEm).toBe(ASOF.toISOString());
-    // Consumiu a camada de dados própria, não a OpLab.
+    // Consumiu a camada de dados própria (COTAHIST).
     expect(dadosCadeia.getCadeiaCotahist).toHaveBeenCalledWith("PETR4");
   });
 

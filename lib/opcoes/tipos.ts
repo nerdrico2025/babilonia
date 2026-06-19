@@ -3,12 +3,11 @@
  *
  * SÓ TIPOS: sem imports de DB, UI, integrações ou qualquer runtime. É a fonte de
  * verdade do FORMATO da cadeia/gregas/volatilidade, desacoplada da FONTE de dados
- * (hoje OpLab; depois COTAHIST/B3 + Black-Scholes próprio). Por não ter efeitos
- * nem dependências, pode ser importado pelo núcleo puro `options-math` sem violar
- * a pureza, pela UI e pelas integrações — todos falam o mesmo vocabulário.
+ * (COTAHIST/B3 + Black-Scholes próprio). Por não ter efeitos nem dependências, pode
+ * ser importado pelo núcleo puro `options-math` sem violar a pureza, pela UI e pelas
+ * integrações — todos falam o mesmo vocabulário.
  *
- * Tipos EXCLUSIVOS de uma fonte específica (ex.: `TaxaJuros`,
- * `OpenInterestIndisponivel` da OpLab) NÃO moram aqui — ficam no módulo da fonte.
+ * Tipos EXCLUSIVOS de uma fonte específica NÃO moram aqui — ficam no módulo da fonte.
  */
 
 // ── Tipo base ────────────────────────────────────────────────────────────────
@@ -85,8 +84,8 @@ export interface VolatilidadeAtivo {
   ivRankPorContratoDisponivel: false;
   /**
    * Confiabilidade do IV Rank de 1 ANO (a UI usa para o aviso "histórico
-   * parcial/insuficiente", §9). OPCIONAL: a fonte OpLab não preenche (e não precisa
-   * mudar). `estado`: 'completo' (≥252 pregões) / 'parcial' (120–251) /
+   * parcial/insuficiente", §9). OPCIONAL: uma fonte pode não preencher.
+   * `estado`: 'completo' (≥252 pregões) / 'parcial' (120–251) /
    * 'insuficiente' (<120 → ranks `null`). `diasJanela`: pregões efetivamente na
    * janela. (O 6m não tem badge próprio — herda este aviso.)
    */

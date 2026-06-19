@@ -2,11 +2,9 @@
  * dados-opcoes/gregas — GREGAS + IV de UMA opção, on-demand, a partir do COTAHIST
  * (§6.4 #2 do PRD).
  *
- * SUBSTITUTA de `getGregas` da OpLab (`lib/integrations/oplab.ts`): em vez da
- * calculadora BS remota, usa o nosso Black-Scholes PURO (`lib/options-math`),
- * devolvendo o MESMO tipo neutro `GregasOpcao` (`lib/opcoes/tipos.ts`). As gregas
- * NÃO vêm na cadeia (§6.4 #2): são calculadas por opção, sob demanda. ADITIVO: não
- * liga rotas/UI nem toca na OpLab.
+ * Usa o nosso Black-Scholes PURO (`lib/options-math`), devolvendo o tipo neutro
+ * `GregasOpcao` (`lib/opcoes/tipos.ts`). As gregas NÃO vêm na cadeia (§6.4 #2): são
+ * calculadas por opção, sob demanda. É a fonte da `/api/gregas` (§4.5).
  *
  * De onde vem cada número (documentado; nada inventado §2.4):
  *  - Série em `opcao_cotahist` pelo `symbol` (pregão mais recente, ou o passado):

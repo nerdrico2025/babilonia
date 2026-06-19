@@ -30,8 +30,9 @@ function fmtPctNum(v: number | null): string {
 }
 
 /**
- * Bloco 3 — Volatilidade (§8.2, §9). IV e IV Rank/percentil vêm da OpLab (via
- * /api/cadeia). A regra do §9: IV Rank alto → tende a favorecer estruturas
+ * Bloco 3 — Volatilidade (§8.2, §9). IV e IV Rank/percentil são calculados por nós
+ * (a partir do COTAHIST/`iv_history`) e chegam via /api/cadeia. A regra do §9: IV
+ * Rank alto → tende a favorecer estruturas
  * vendidas; baixo → compradas — sempre como leitura, nunca ordem (§2.3). O skew
  * não vem na API (§6.4): o usuário cola a IV de uma put e de uma call OTM.
  */
@@ -96,7 +97,7 @@ export function BlocoVolatilidade({
           <Indicador rotulo="IV percentil 1a" valor={fmtPctNum(volatilidade?.ivPercentil1a ?? null)} />
         </div>
 
-        {/* Skew: input manual (a OpLab não entrega skew por opção, §6.4). */}
+        {/* Skew: input manual (não derivamos skew por opção no MVP, §6.4). */}
         <details className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2">
           <summary className="cursor-pointer text-sm font-medium">
             Calcular <TermoTecnico termo="skew">skew</TermoTecnico> (colar IV de put e call OTM)

@@ -2,11 +2,10 @@
  * dados-opcoes/volatilidade — VOLATILIDADE do ativo (IV atual + IV Rank/Percentil)
  * a partir de `iv_history` (§8.2/§9 do PRD).
  *
- * SUBSTITUTA de `getVolatilidadeAtivo` da OpLab (`lib/integrations/oplab.ts`),
- * devolvendo o MESMO tipo neutro `VolatilidadeAtivo` (`lib/opcoes/tipos.ts`). A IV
- * Rank é CALCULADA por nós (núcleo puro `calcularIvRank`) sobre a série diária já
- * gravada em `iv_history` — nada vem pronto (§6.4). ADITIVO: não liga rotas/UI nem
- * toca na OpLab.
+ * Devolve o tipo neutro `VolatilidadeAtivo` (`lib/opcoes/tipos.ts`). A IV Rank é
+ * CALCULADA por nós (núcleo puro `calcularIvRank`) sobre a série diária já gravada
+ * em `iv_history` — nada vem pronto (§6.4). É a fonte da volatilidade da
+ * `/api/cadeia` (§4.4).
  *
  * Convenções (documentadas; nada inventado §2.4):
  *  - `ivAtual`: IV representativa MAIS RECENTE de `iv_history`, convertida de
@@ -112,8 +111,8 @@ export function montarVolatilidade(
 
 /**
  * Volatilidade do ativo (IV atual + IV Rank/Percentil 1a/6m) a partir de
- * `iv_history`. Substitui `getVolatilidadeAtivo` da OpLab. Degrada coerente (sem
- * IV diária → tudo `null`, `asOf: null`), nunca quebra a tela (§2.6).
+ * `iv_history`. Degrada coerente (sem IV diária → tudo `null`, `asOf: null`),
+ * nunca quebra a tela (§2.6).
  */
 export async function getVolatilidadeCotahist(
   ativo: string,

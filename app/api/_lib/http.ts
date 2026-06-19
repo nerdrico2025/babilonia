@@ -2,7 +2,7 @@
  * Helpers compartilhados dos Route Handlers (§5.1 do PRD).
  *
  * As rotas em `app/api/` são o ÚNICO ponto que fala com as integrações
- * (brapi/OpLab) — nenhuma tela chama as APIs externas direto. Este módulo
+ * (brapi/COTAHIST/BCB-SGS) — nenhuma tela chama as fontes direto. Este módulo
  * concentra o que toda rota repete: guarda de sessão (§13), metadado de
  * "frescor" do dado (§6.3) e tradução de erros para JSON.
  *

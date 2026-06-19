@@ -357,9 +357,9 @@ export const GLOSSARIO: readonly Termo[] = [
     slug: "open-interest",
     termo: "Open interest",
     curto:
-      "Número de contratos em aberto numa série — a OpLab não fornece (§6.4).",
+      "Número de contratos em aberto numa série — o COTAHIST/B3 não fornece (§6.4).",
     longo:
-      "Open interest é a quantidade de contratos em aberto numa série de opção, usada como indício de liquidez. A integração OpLab não fornece esse dado (§6.4); por isso o Babilônia avalia a liquidez por volume, spread e presença de market maker.",
+      "Open interest é a quantidade de contratos em aberto numa série de opção, usada como indício de liquidez. A fonte da cadeia (COTAHIST/B3) não fornece esse dado (§6.4); por isso o Babilônia avalia a liquidez por volume, número de negócios e spread.",
     categoria: "Liquidez",
   },
 

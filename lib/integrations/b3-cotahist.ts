@@ -3,8 +3,7 @@
  *
  * Contrato confirmado em `docs/apis/b3-cotahist.md` (layout de 245 bytes/registro,
  * posições 1-based inclusivas, conferidas contra o PDF oficial da B3). Decisão de
- * fonte em §6.2 do PRD e em `AGENTS.md` (a OpLab saiu; a cadeia de opções vem do
- * COTAHIST EOD).
+ * fonte em §6.2 do PRD e em `AGENTS.md` (a cadeia de opções vem do COTAHIST EOD).
  *
  * ⚠️ ESTE MÓDULO NÃO BAIXA NADA NEM TOCA O BANCO. É parsing PURO de uma linha em
  * um objeto tipado — o pipeline de ingestão (download → stream → gravação) vem

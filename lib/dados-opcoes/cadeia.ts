@@ -1,11 +1,10 @@
 /**
  * dados-opcoes/cadeia — CADEIA DE OPÇÕES a partir do COTAHIST (§6.2/§6.4 do PRD).
  *
- * É a SUBSTITUTA de `getCadeiaOpcoes` da OpLab (`lib/integrations/oplab.ts`): lê do
- * Postgres (`opcao_cotahist` + `acao_cotahist` + `iv_history`, ingeridos por job —
- * §5.1) e devolve o MESMO tipo neutro `CadeiaOpcoes` (`lib/opcoes/tipos.ts`), para
- * que a UI/montador não saibam de onde o dado veio. ADITIVO: nesta etapa o app
- * segue usando a OpLab; ligar rotas/UI vem depois.
+ * Lê do Postgres (`opcao_cotahist` + `acao_cotahist` + `iv_history`, ingeridos por
+ * job — §5.1) e devolve o tipo neutro `CadeiaOpcoes` (`lib/opcoes/tipos.ts`), para
+ * que a UI/montador não saibam de onde o dado veio. É a fonte da cadeia da
+ * `/api/cadeia` (§4.4).
  *
  * Decisões de mapeamento COTAHIST → `OpcaoCadeia` (documentadas, nada inventado §2.4):
  *  - DADO É EOD: a cadeia é do FECHAMENTO do pregão mais recente do ativo (a
@@ -15,7 +14,7 @@
  *  - `spread = ask − bid` (≥ 0) só quando AMBOS existem; senão `null`. O prêmio MID
  *    `(bid+ask)/2` NÃO é um campo de `OpcaoCadeia` — é derivado on-demand por
  *    `precoReferencia(op)` de `lib/liquidez.ts` a partir destes `bid`/`ask`, igual
- *    ao resto do app (a OpLab também não trazia "premio" pronto na cadeia).
+ *    ao resto do app (o COTAHIST não traz "premio" pronto na cadeia).
  *  - `volume`: QUATOT (`quantidade_titulos`) — contratos negociados no dia; é o
  *    proxy de "volume em contratos" que `lib/liquidez.ts` compara com os limites.
  *  - `volumeFinanceiro`: VOLTOT (`volume_financeiro`, BRL). `negocios`: TOTNEG.
@@ -199,9 +198,9 @@ async function buscarIvAtual(ativo: string, db: Db): Promise<number | null> {
 }
 
 /**
- * Cadeia de opções estruturada do ativo a partir do COTAHIST (§6.2). Substitui
- * `getCadeiaOpcoes` da OpLab devolvendo o mesmo `CadeiaOpcoes` neutro + a data-base
- * (as-of). Sem gregas/IV por opção (on-demand pela rota) e sem open interest (§6.4).
+ * Cadeia de opções estruturada do ativo a partir do COTAHIST (§6.2). Devolve o
+ * `CadeiaOpcoes` neutro + a data-base (as-of). Sem gregas/IV por opção (on-demand
+ * pela rota) e sem open interest (§6.4).
  *
  * Degradação graciosa (§2.6): ativo sem cadeia ingerida (fora da watchlist / sem
  * ingestão) → `asOf: null` e cadeia VAZIA coerente (sem `precoAtivo`/`ivAtual`),

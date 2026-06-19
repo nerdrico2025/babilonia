@@ -568,7 +568,7 @@ function TabelaCadeia({
                     n/d
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
-                    Open interest não é fornecido pela OpLab (§6.4). A liquidez usa volume, spread e market maker.
+                    Open interest não é fornecido pelo COTAHIST/B3 (§6.4). A liquidez usa volume, número de negócios e spread.
                   </TooltipContent>
                 </Tooltip>
               </TableCell>

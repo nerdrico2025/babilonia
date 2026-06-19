@@ -24,8 +24,7 @@ export default async function ConfiguracoesPage() {
   // Status das chaves: só "configurada / faltando", JAMAIS o valor (§5.1).
   const chaves = [
     { nome: "BRAPI_TOKEN", presente: !!process.env.BRAPI_TOKEN, descricao: "Cotações do ativo-objeto (brapi)." },
-    { nome: "OPLAB_ACCESS_TOKEN", presente: !!process.env.OPLAB_ACCESS_TOKEN, descricao: "Cadeia de opções, IV e gregas (OpLab)." },
-    { nome: "DATABASE_URL", presente: !!process.env.DATABASE_URL, descricao: "Banco de dados (book, cache, configurações)." },
+    { nome: "DATABASE_URL", presente: !!process.env.DATABASE_URL, descricao: "Banco de dados (book, cache, cadeia COTAHIST, configurações)." },
     { nome: "AUTH_SECRET", presente: !!process.env.AUTH_SECRET, descricao: "Assinatura da sessão de login." },
   ];
 

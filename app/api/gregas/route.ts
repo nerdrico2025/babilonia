@@ -4,7 +4,7 @@
  * As gregas/IV NÃO vêm na cadeia (§6.4 #2): são calculadas por opção, sob demanda,
  * pelo NOSSO Black-Scholes (`lib/dados-opcoes/gregas` → `lib/options-math`), a partir
  * do prêmio de fechamento + spot (COTAHIST) + SELIC (BCB-SGS). Esta rota é o
- * consumidor — último a sair da OpLab (passo 4.5).
+ * consumidor.
  *
  * Query:
  *  - `symbol`   (obrigatório) — ticker exato da opção (ex.: PETRK221);

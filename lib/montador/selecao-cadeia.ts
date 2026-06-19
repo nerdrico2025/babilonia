@@ -6,7 +6,7 @@
  * global, usamos o `sessionStorage` (some ao fechar a aba) — simples e suficiente
  * no MVP (§2.6). É o CONTRATO consumido pelo montador (ver `prefill.ts`).
  *
- * Os NÚMEROS (strike, prêmio de referência) vêm da cadeia da OpLab; aqui só os
+ * Os NÚMEROS (strike, prêmio de referência) vêm da cadeia (COTAHIST); aqui só os
  * transportamos — nada é inventado (§2.4).
  */
 
@@ -19,7 +19,7 @@ export interface SerieSelecionada {
   tipo: TipoOpcao;
   /** Strike em BRL, por ação. */
   strike: number;
-  /** Vencimento (data ISO, como veio da OpLab). */
+  /** Vencimento (data ISO, como veio da cadeia). */
   vencimento: string;
   /** Prêmio de referência (mid bid/ask), em BRL por ação; `null` se faltar. */
   premioRef: number | null;

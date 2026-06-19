@@ -1,8 +1,8 @@
 /**
  * cache — núcleo de cache REUTILIZÁVEL das integrações (§6.3 do PRD).
  *
- * Get-or-fetch com TTL e degradação graciosa, compartilhado por `brapi.ts` e
- * `oplab.ts`. O armazenamento é abstraído atrás de `CacheStore` (default:
+ * Get-or-fetch com TTL e degradação graciosa, usado pelas integrações com chave
+ * (hoje `brapi.ts`). O armazenamento é abstraído atrás de `CacheStore` (default:
  * tabela `api_cache` via Drizzle, §7) para ser testável sem Postgres.
  *
  * Resiliência (§6.3, §13): falha/cota degrada para o cache (mesmo vencido) com

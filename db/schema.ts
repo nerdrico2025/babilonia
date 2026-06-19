@@ -5,8 +5,8 @@
  *  - Dinheiro (BRL): `numeric` (decimal) — nunca float, para não perder centavos.
  *  - Quantidades: `integer` em lotes/contratos.
  *  - Datas/horas: `timestamp` COM timezone (`withTimezone`).
- *  - Gregas/IV: guardadas COMO VIERAM da OpLab, com o timestamp da fonte
- *    (`greeks_source_at`) — nunca recalculadas aqui.
+ *  - Gregas/IV: guardadas com o timestamp do pregão (EOD) que as originou
+ *    (`greeks_source_at`) — calculadas pelo `lib/options-math`, nunca aqui.
  *  - Coleções variáveis (breakevens, preferências, payloads): `jsonb`.
  */
 import { relations } from "drizzle-orm";
@@ -51,8 +51,8 @@ export const structureType = pgEnum("structure_type", [
 
 /**
  * Tipo da opção — valores de DOMÍNIO, alinhados a `TipoOpcao` de
- * `lib/options-math`. O formato externo da OpLab (`"CALL"`/`"PUT"`) é convertido
- * na fronteira de integração (`lib/integrations/oplab`), não armazenado cru.
+ * `lib/options-math`. O formato externo do COTAHIST (`TPMERC` 070/080) é convertido
+ * na ingestão (`lib/integrations/b3-cotahist`), não armazenado cru.
  */
 export const optionKind = pgEnum("option_kind", ["call", "put"]);
 
@@ -106,8 +106,8 @@ export const position = pgTable("position", {
 });
 
 // ── leg (perna individual) ───────────────────────────────────────────────────
-// Cada perna de opção de uma `position`. Guarda também as gregas/IV COMO VIERAM
-// da OpLab, com o timestamp da fonte (§7) — nunca recalculadas aqui.
+// Cada perna de opção de uma `position`. Guarda também as gregas/IV calculadas
+// (`lib/options-math`), com o timestamp do pregão (EOD) que as originou (§7).
 export const leg = pgTable("leg", {
   id: serial("id").primaryKey(),
   positionId: integer("position_id")
@@ -126,7 +126,7 @@ export const leg = pgTable("leg", {
   /** Prêmio unitário em BRL. */
   premium: brl("premium").notNull(),
 
-  // Gregas e IV como vieram da OpLab (nullable — podem não estar disponíveis).
+  // Gregas e IV calculadas pelo `lib/options-math` (nullable — podem faltar).
   delta: metric("delta"),
   gamma: metric("gamma"),
   theta: metric("theta"),
@@ -134,7 +134,7 @@ export const leg = pgTable("leg", {
   rho: metric("rho"),
   /** Volatilidade implícita (IV) da opção. */
   iv: metric("iv"),
-  /** Timestamp da fonte (OpLab) para as gregas/IV acima. */
+  /** Timestamp do pregão (EOD) que originou as gregas/IV acima. */
   greeksSourceAt: timestamp("greeks_source_at", { withTimezone: true }),
 
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -366,8 +366,8 @@ export const ivHistory = pgTable(
 );
 
 // ── api_cache ────────────────────────────────────────────────────────────────
-// Cache genérico das integrações (brapi/OpLab) com TTL (§6.3). A camada de
-// integração grava aqui o payload JSON e a data de expiração.
+// Cache genérico das integrações com chave (hoje brapi) com TTL (§6.3). A camada
+// de integração grava aqui o payload JSON e a data de expiração.
 export const apiCache = pgTable("api_cache", {
   id: serial("id").primaryKey(),
   /** Chave única do cache (ex.: "brapi:quote:PETR4"). */

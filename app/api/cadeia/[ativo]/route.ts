@@ -1,11 +1,9 @@
 /**
  * GET /api/cadeia/{ativo} — cadeia de opções + IV/IV Rank do ativo (COTAHIST, §6.2).
  *
- * PRIMEIRA TROCA AO VIVO (passo 4.4): a rota consome a camada de dados própria
- * (`lib/dados-opcoes`, COTAHIST + Black-Scholes/`iv_history`) NO LUGAR da OpLab. O
- * SHAPE do JSON e o comportamento visto pela UI ficam iguais — só o FRESCOR muda de
- * "dado de HH:MM" para a DATA-BASE de fechamento (EOD), pois o dado é ingerido por
- * job (§5.1) e não tem cache de request. Devolve dois blocos:
+ * A rota consome a camada de dados própria (`lib/dados-opcoes`, COTAHIST +
+ * Black-Scholes/`iv_history`). O FRESCOR é a DATA-BASE de fechamento (EOD), pois o
+ * dado é ingerido por job (§5.1) e não tem cache de request. Devolve dois blocos:
  *  - `cadeia`: grade call/put por strike e vencimento (essencial — sem ela, 503);
  *  - `volatilidade`: IV atual + IV Rank/percentil do ATIVO-OBJETO (§6.4 #3 — IV
  *    Rank só existe no ativo, nunca por contrato; complementar — degrada para null).
@@ -16,8 +14,6 @@
  * ⚠️ Lacunas §6.4 repassadas honestamente pela camada de dados:
  *  - gregas/IV por opção NÃO vêm na cadeia → ver `GET /api/gregas` (on-demand);
  *  - open interest NÃO existe no COTAHIST → liquidez por volume + spread.
- *
- * A `/api/gregas` segue na OpLab por ora (trocada no passo 4.5) — não mexida aqui.
  */
 import { getCadeiaCotahist } from "@/lib/dados-opcoes/cadeia";
 import { getVolatilidadeCotahist } from "@/lib/dados-opcoes/volatilidade";

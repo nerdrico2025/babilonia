@@ -32,7 +32,7 @@ async function buscarJson<T>(url: string): Promise<T | null> {
 /**
  * `<AnaliseCliente>` — a tela 4 (§8.2, §9). Busca um ticker e reúne, em três
  * blocos (técnico, fundamentalista, volatilidade), os dados das rotas
- * `/api/ativo` (brapi), `/api/cadeia` (OpLab) e `/api/calendario` (brapi). Cada
+ * `/api/ativo` (brapi), `/api/cadeia` (COTAHIST) e `/api/calendario` (brapi). Cada
  * bloco degrada sozinho: se uma fonte falhar, os outros blocos seguem, e o
  * usuário pode colar dados (§2.4). Nenhuma recomendação — só leitura (§9).
  */

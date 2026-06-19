@@ -4,7 +4,7 @@
  * Módulo PURO e testável. Princípio §2.5: "a ordem precisa ser executável" — por
  * isso séries com pouco volume ou spread largo recebem ALERTA.
  *
- * ⚠️ A OpLab NÃO fornece open interest (§6.4 #1) — nunca inventamos (§2.4). A
+ * ⚠️ O COTAHIST/B3 NÃO fornece open interest (§6.4 #1) — nunca inventamos (§2.4). A
  * liquidez no MVP usa os proxies disponíveis: VOLUME (contratos no dia), SPREAD
  * relativo (ask − bid sobre o preço de referência) e presença de MARKET MAKER.
  *

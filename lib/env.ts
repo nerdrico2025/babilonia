@@ -10,7 +10,6 @@ import { z } from "zod";
 
 const serverEnvSchema = z.object({
   BRAPI_TOKEN: z.string().min(1),
-  OPLAB_ACCESS_TOKEN: z.string().min(1),
   DATABASE_URL: z.string().url(),
   AUTH_SECRET: z.string().min(1),
   AUTH_USERNAME: z.string().min(1),

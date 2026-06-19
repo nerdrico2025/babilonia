@@ -24,8 +24,8 @@ import { z } from "zod";
 import { cacheGetOrFetch, storePadrao } from "./cache";
 import type { OpcoesBusca, ResultadoIntegracao } from "./cache";
 
-// Reexporta o núcleo de cache (compartilhado com `oplab.ts`) para os
-// consumidores/testes que ainda importam a partir de `brapi.ts`.
+// Reexporta o núcleo de cache para os consumidores/testes que importam a partir
+// de `brapi.ts`.
 export {
   criarCacheStoreDrizzle,
   IntegracaoIndisponivelError as BrapiIndisponivelError,

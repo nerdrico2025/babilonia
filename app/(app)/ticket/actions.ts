@@ -105,8 +105,8 @@ export async function persistirTicket(
 
     const positionId = pos!.id;
 
-    // 2) leg — uma linha por perna de opção. Gregas/IV ficam nulas aqui: são da
-    //    OpLab (§7) e não pertencem ao ato de montar/registrar a operação.
+    // 2) leg — uma linha por perna de opção. Gregas/IV ficam nulas aqui: são
+    //    calculadas on-demand (§7) e não pertencem ao ato de registrar a operação.
     await db.insert(leg).values(
       p.pernas.map((perna) => ({
         positionId,

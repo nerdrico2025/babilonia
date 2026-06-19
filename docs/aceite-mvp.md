@@ -26,7 +26,6 @@ autodetectado). O build de produção está **verde**. A conexão com o banco é
 | Variável | Uso |
 |---|---|
 | `BRAPI_TOKEN` | Cotação (brapi) |
-| `OPLAB_ACCESS_TOKEN` | Cadeia / IV / gregas (OpLab, plano PRO) |
 | `DATABASE_URL` | Postgres no **Neon** (use a connection string *pooled*) |
 | `AUTH_SECRET` | Assinatura da sessão (`openssl rand -base64 32`) |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | Único usuário (mono-usuário) |
@@ -34,7 +33,8 @@ autodetectado). O build de produção está **verde**. A conexão com o banco é
 **Passos:**
 1. Provisionar o Postgres no **Neon** (Vercel Marketplace ou conta Neon) e copiar a
    `DATABASE_URL`.
-2. Definir as 6 variáveis acima no projeto da Vercel.
+2. Definir as 5 variáveis acima no projeto da Vercel. (A cadeia COTAHIST/B3 e a taxa
+   BCB-SGS são fontes públicas, sem chave.)
 3. Rodar as migrations contra o Neon: `npm run db:migrate` (e, se for o primeiro
    deploy, `npm run db:seed` para criar a linha de `settings` com o capital).
 4. `git push` na branch de produção → build automático. (O `vercel deploy` é um passo
@@ -45,8 +45,8 @@ autodetectado). O build de produção está **verde**. A conexão com o banco é
 
 ## 2. Nenhuma chave de API vaza para o cliente (§13/§5.1) — ✅
 
-- `process.env.{BRAPI_TOKEN,OPLAB_ACCESS_TOKEN,AUTH_SECRET,AUTH_PASSWORD}` só aparece
-  em **código de servidor**: `lib/integrations/{brapi,oplab}.ts`, `lib/env.ts`,
+- `process.env.{BRAPI_TOKEN,AUTH_SECRET,AUTH_PASSWORD}` só aparece
+  em **código de servidor**: `lib/integrations/brapi.ts`, `lib/env.ts`,
   `auth.ts` e a Server Action/route da tela de Configurações.
 - **Nenhuma** variável `NEXT_PUBLIC_*` (que vazaria ao cliente).
 - Os componentes `"use client"` que tocam tipos das integrações usam **`import type`**
@@ -69,12 +69,13 @@ Todos os testes do Vitest passam (207) e o build de produção conclui sem erros
   *Ressalva:* o login real exige `AUTH_*`/`DATABASE_URL` no ambiente — confirmar no
   smoke test pós-deploy.
 
-- [x] **brapi + OpLab com cache funcionando.** — ✅
-  Acesso só via `lib/integrations` com `cacheGetOrFetch` (TTL + degradação para
-  cache com aviso); as telas chamam os proxies `app/api/*`. Coberto por
-  `brapi.test.ts`, `oplab.test.ts` e `routes.test.ts` (cache, fallback e frescor).
-  *Ressalva:* chamadas ao vivo dependem dos tokens (OpLab exige plano PRO) — validar
-  no smoke test; o caminho de runtime e a resiliência estão testados.
+- [x] **Integrações com cache funcionando (migração da OpLab concluída).** — ✅
+  A cadeia/IV/gregas vêm do COTAHIST/B3 (ingestão em job) + Black-Scholes próprio;
+  a cotação (brapi) usa `cacheGetOrFetch` (TTL + degradação para cache com aviso). As
+  telas chamam os proxies `app/api/*`. Coberto por `brapi.test.ts`, `routes.test.ts`
+  e os testes de `lib/dados-opcoes/*` (cadeia, volatilidade, gregas).
+  *Ressalva:* a cotação ao vivo depende do `BRAPI_TOKEN` — validar no smoke test; o
+  caminho de runtime e a resiliência estão testados.
 
 - [x] **Montador calcula risco máx., ganho máx. e breakeven corretos (casos
   conhecidos).** — ✅
@@ -127,8 +128,9 @@ Todos os testes do Vitest passam (207) e o build de produção conclui sem erros
 
 1. Abrir a URL → redireciona para `/login`; entrar com `AUTH_USERNAME/PASSWORD` → cai
    no dashboard com book vazio.
-2. `/analise` e `/cadeia`: buscar `PETR4` → dados da brapi/OpLab aparecem; segunda
-   busca vem do cache (frescor "em cache"); cortar a rede mostra o aviso de fallback.
+2. `/analise` e `/cadeia`: buscar `PETR4` → cotação (brapi) e cadeia/IV/gregas
+   (COTAHIST, fechamento EOD) aparecem; a cotação tem cache (frescor "em cache") e
+   cortar a rede mostra o aviso de fallback.
 3. `/montador`: montar uma trava de alta → conferir risco/ganho/breakeven e o payoff;
    gerar ticket → copiar → confirmar (entra no book e no histórico).
 4. `/configuracoes`: ajustar capital → ver os indicadores do dashboard recalcularem.

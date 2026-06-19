@@ -27,11 +27,11 @@ linguagem simples sempre.
    **risco DEFINIDO** ou **risco INDEFINIDO**.
 3. **Decisão é do usuário.** O app mostra cenários, nunca "compre/venda".
    Disclaimers visíveis de que não é consultoria.
-4. **Dados reais primeiro.** Análises usam dados das integrações (brapi para
-   cotação; COTAHIST/B3 para a cadeia; BCB SGS para a taxa) ou colados pelo
-   usuário. Faltando dado essencial (preço, prêmio, taxa), **pedir explicitamente —
-   nunca inventar**. Gregas/IV são **calculadas** pelo `options-math` (§18.1), não
-   inventadas.
+4. **Dados reais primeiro.** Análises usam dados das integrações (bolsai para
+   fundamentos; COTAHIST/B3 para preço do objeto e cadeia; BCB SGS para a taxa) ou
+   colados pelo usuário. Faltando dado essencial (preço, prêmio, taxa), **pedir
+   explicitamente — nunca inventar**. Gregas/IV são **calculadas** pelo
+   `options-math` (§18.1), não inventadas.
 5. **Liquidez importa.** Séries com pouco volume/poucos negócios ou spread largo
    recebem alerta (a ordem precisa ser executável). ⚠️ Não há open interest na
    fonte (§6.2/§6.4) — liquidez no MVP usa **volume + nº de negócios + spread**.
@@ -45,8 +45,8 @@ linguagem simples sempre.
   trata só a perna de opção.
 - **Risco antes do ganho** em toda saída (telas, ticket, resumos).
 - **Decisão é sempre do usuário** — nada de recomendação personalizada.
-- **Chaves de API só no servidor.** Nunca expor `BRAPI_TOKEN` no cliente. As rotas
-  `app/api/` atuam como proxy. (COTAHIST/B3 e BCB SGS são públicos, sem chave.)
+- **Chaves de API só no servidor.** Nunca expor `BOLSAI_API_KEY` no cliente. As
+  rotas `app/api/` atuam como proxy. (COTAHIST/B3 e BCB SGS são públicos, sem chave.)
 
 ## Stack (§4)
 
@@ -83,7 +83,7 @@ linguagem simples sempre.
   (pricing, solver de IV, gregas — §18.1; desenho em
   `docs/design/options-math-black-scholes.md`).
 - **Integrações sempre via camada própria + cache.** Nenhuma tela chama
-  brapi/COTAHIST/SGS direto; tudo passa por `lib/integrations` com cache e
+  bolsai/COTAHIST/SGS direto; tudo passa por `lib/integrations` com cache e
   tratamento de erro. Falha/cota degrada para cache com aviso, nunca quebra a tela.
   A cadeia COTAHIST é **ingerida em job** (não request-por-tela): o job baixa e
   parseia o arquivo EOD para o Postgres, e as telas leem do banco.
@@ -101,8 +101,8 @@ app/
   (telas)         dashboard, ativo, cadeia, montador, ticket...
 components/ui/    componentes shadcn/ui
 lib/
-  integrations/   brapi.ts (cotação), b3-cotahist.ts (download/parse da cadeia
-                  EOD), bcb-sgs.ts (taxa livre de risco)  + cache/ingestão
+  integrations/   bolsai.ts (fundamentos), b3-cotahist.ts (download/parse de preço
+                  do objeto + cadeia EOD), bcb-sgs.ts (taxa livre de risco)  + cache/ingestão
   options-math/   payoff, risco, breakeven, black-scholes (IV/gregas)  ← núcleo puro e testado
   risk-rules/     regras de capital e concentração (§10)
   ticket/         geração e formatação do ticket (§11)
@@ -137,11 +137,13 @@ Apresentar com semáforo + texto claro. (Constantes em `lib/risk-rules`.)
 
 ## Integrações e dados de opções — pontos de atenção (§6.2 / §6.4)
 
-> **Decisão 2026-06-16:** a **OpLab saiu de cogitação** (cara, sem plano gratuito
-> via API). Fontes: **brapi** (cotação do objeto), **COTAHIST/B3** (cadeia de
-> opções EOD) e **BCB SGS** (taxa). Contratos em `docs/apis/b3-cotahist.md`,
-> `docs/apis/bcb-sgs.md`, `docs/apis/brapi.md`; motor de gregas/IV em
-> `docs/design/options-math-black-scholes.md`. (`docs/apis/oplab.md` é histórico.)
+> **Decisão 2026-06-16/19:** a **OpLab** e o **brapi** saíram de cogitação (caros /
+> sem cobertura no plano gratuito). Fontes atuais: **bolsai** (fundamentos do
+> objeto), **COTAHIST/B3** (preço do objeto EOD + cadeia de opções EOD) e **BCB
+> SGS** (taxa). Contratos em `docs/apis/b3-cotahist.md`, `docs/apis/bcb-sgs.md`,
+> `docs/migracao-fundamentos.md` (bolsai); motor de gregas/IV em
+> `docs/design/options-math-black-scholes.md`. (`docs/apis/oplab.md` e
+> `docs/apis/brapi.md` são históricos.)
 
 Decisões de design **já fechadas** — não reintroduzir o modelo OpLab:
 
@@ -172,8 +174,17 @@ Decisões de design **já fechadas** — não reintroduzir o modelo OpLab:
   **`iv_history`** (não esperar a métrica "nascer"; ela funciona desde o 1º uso).
 - **Vínculo opção→ativo-objeto é heurístico** (raiz do ticker + `NOMRES`/ISIN) e
   **restrito à watchlist no MVP** — não tentar mapear toda a B3.
-- **brapi:** no MVP só **cotação** (plano Free); fundamentos/proventos são input
-  manual (§6.1). Calendário de resultados não existe no brapi (input manual).
+- **Fundamentos:** vêm da **bolsai** (P/L, EV/EBITDA, P/VP, margem líquida, ROE,
+  ROIC, ROA, LPA, VPA, market cap, lucro líquido, EBITDA), gravados na tabela
+  `fundamentos` (frescor por `atualizado_em`). **Dividend yield foi removido do
+  produto** (a bolsai não fornece). Percentuais vêm em **pontos** (21,69 = 21,69%)
+  — não normalizar.
+- **Preço do objeto (Bloco Técnico):** **COTAHIST EOD** (`acao_cotahist`), não
+  cotação ao vivo — a UI mostra **aviso datado** ("Preço de fechamento de DD/MM").
+  Variação derivada do pregão anterior.
+- **Proventos e calendário de resultados:** **manuais** (campo de data no montador
+  de ticket). A busca automática (`/api/calendario`) foi **desligada** — a rota só
+  sinaliza indisponibilidade tipada; nada de lista vazia silenciosa.
 
 ## Comandos
 
@@ -194,8 +205,8 @@ O app inteiro (telas + `app/api/`, exceto `/api/auth/*`) é protegido pelo proxy
 - **Arquivos:** `auth.config.ts` (edge-safe, usado pelo proxy) · `auth.ts`
   (provider, runtime Node) · `proxy.ts` · `app/api/auth/[...nextauth]/route.ts`
   · `app/login/` (tela 1, §14).
-- O login **só protege o acesso**. A chave de API (`BRAPI_TOKEN`) segue server-only
-  e nunca chega ao cliente (§5.1). COTAHIST e BCB SGS são públicos, sem chave.
+- O login **só protege o acesso**. A chave de API (`BOLSAI_API_KEY`) segue
+  server-only e nunca chega ao cliente (§5.1). COTAHIST e BCB SGS são públicos, sem chave.
 
 **Rodar local autenticado:**
 1. No `.env.local` defina `AUTH_SECRET` (`openssl rand -base64 32`),
@@ -233,12 +244,12 @@ do drizzle-kit — por isso `db:generate` faz parte do smoke test).
 ## Roadmap (§15)
 
 - **Fase 0 — Fundação** (atual): setup do projeto, fronteiras de pastas, CLAUDE.md.
-- **Fase 1 — MVP:** integrações + cache (brapi; ingestão COTAHIST; BCB SGS),
+- **Fase 1 — MVP:** integrações + cache (bolsai; ingestão COTAHIST; BCB SGS),
   `options-math` testado (payoff/risco **+ Black-Scholes/IV/gregas**), backfill de
   `iv_history`, montador, payoff, regras de risco, gerador de ticket, glossário
   básico.
 - **Fase 2 — Análise rica:** telas de análise completas, filtro de liquidez,
-  skew, IV Rank visual, histórico/diário, fundamentos automáticos (brapi Startup).
+  skew, IV Rank visual, histórico/diário, fundamentos automáticos (bolsai).
 - **Fase 3 — Quant (opcional):** microserviço Python — incl. **modelo
   americano/binomial e ajuste de dividendos** para o pricing (revisão da
   simplificação do MVP).

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 /**
  * Testes de integração leves dos Route Handlers (§5.1/§13 do PRD).
  *
- * O auth (`@/auth`), o brapi e a camada de dados COTAHIST (`lib/dados-opcoes`) são
+ * O auth (`@/auth`) e a camada de dados COTAHIST/fundamentos (`lib/dados-opcoes`) são
  * MOCKADOS — nada toca a rede, o Postgres ou o NextAuth real. Validamos o contrato:
  * guarda de sessão (401), validação de parâmetro (400), uso da camada de cache,
  * o metadado de frescor (§6.3) e a degradação graciosa de dados complementares.

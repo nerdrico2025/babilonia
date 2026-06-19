@@ -8,7 +8,7 @@
  * fonteAlternativa }` já usado para resultados, §6.4) — nunca inventa dado (§2.4)
  * nem devolve uma lista vazia que pareça "não há evento previsto".
  *
- * Não toca mais em `lib/integrations/brapi` (que sai no 5.7).
+ * Não consome nenhuma integração (o brapi foi aposentado na migração, 5.7).
  */
 import {
   exigirSessao,

@@ -427,11 +427,11 @@ export const fundamentos = pgTable("fundamentos", {
 });
 
 // ── api_cache ────────────────────────────────────────────────────────────────
-// Cache genérico das integrações com chave (hoje brapi) com TTL (§6.3). A camada
+// Cache genérico das integrações com chave (hoje bolsai) com TTL (§6.3). A camada
 // de integração grava aqui o payload JSON e a data de expiração.
 export const apiCache = pgTable("api_cache", {
   id: serial("id").primaryKey(),
-  /** Chave única do cache (ex.: "brapi:quote:PETR4"). */
+  /** Chave única do cache (ex.: "bolsai:fundamentos:PETR4"). */
   key: text("key").notNull().unique(),
   /** Payload da resposta cacheada. */
   payload: jsonb("payload").notNull(),

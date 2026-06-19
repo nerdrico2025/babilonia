@@ -20,7 +20,7 @@ import {
  * taxa contínua com valor conhecido, e o caminho cache-hit / cache→fallback.
  */
 
-// ── Infra de teste (mesmo padrão de brapi.test.ts) ───────────────────────────
+// ── Infra de teste (mesmo padrão de bolsai.test.ts) ───────────────────────────
 
 /** Store de cache em memória (espelha o `createdAt`/`expiresAt` do Drizzle). */
 function storeMemoria() {

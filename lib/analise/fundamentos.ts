@@ -1,12 +1,12 @@
 /**
  * analise/fundamentos — leitura FUNDAMENTALISTA do ativo (§8.2, bloco 2).
  *
- * Módulo PURO e testável. Recebe os múltiplos/margens (da brapi quando há plano,
- * ou COLADOS pelo usuário — §2.4) e produz uma leitura de iniciante (§9), sem
- * nunca recomendar (§2.3). Também infere a tendência de lucros pelos trimestres.
+ * Módulo PURO e testável. Recebe os múltiplos/margens (da fonte de fundamentos,
+ * bolsai, ou COLADOS pelo usuário — §2.4) e produz uma leitura de iniciante (§9),
+ * sem nunca recomendar (§2.3). Também infere a tendência de lucros pelos trimestres.
  */
 
-/** Lucro de um trimestre (mesma forma do `BrapiFundamentos`). */
+/** Lucro de um trimestre (entrada opcional para a tendência de lucros). */
 export interface LucroTrimestre {
   fim: string | null;
   lucroLiquido: number | null;
@@ -20,8 +20,6 @@ export interface FundamentosEntrada {
   margemBruta: number | null;
   margemOperacional: number | null;
   margemLiquida: number | null;
-  /** Dividend yield (fração, ex.: 0.08 = 8%, ou já em % se > 1). */
-  dividendYield: number | null;
   lucrosPorTrimestre: LucroTrimestre[];
 }
 
@@ -41,7 +39,6 @@ export function temAlgumFundamento(f: FundamentosEntrada): boolean {
     f.margemBruta != null ||
     f.margemOperacional != null ||
     f.margemLiquida != null ||
-    f.dividendYield != null ||
     f.lucrosPorTrimestre.some((t) => t.lucroLiquido != null)
   );
 }
@@ -65,13 +62,6 @@ export function tendenciaLucros(trimestres: LucroTrimestre[]): TendenciaLucros |
   return "estavel";
 }
 
-/** Formata uma medida que pode vir como fração (0.25) ou já em % (25). */
-function pctFlex(v: number): string {
-  const valor = Math.abs(v) <= 1 ? v * 100 : v;
-  const txt = valor.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-  return `${txt}%`;
-}
-
 function num(v: number): string {
   return v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 }
@@ -88,7 +78,7 @@ export function lerFundamentos(f: FundamentosEntrada): AnaliseFundamentos {
     return {
       tendenciaLucros: null,
       leitura: [
-        "Sem fundamentos da fonte (o brapi Free não os fornece, §6.1). Cole os dados acima para ver a leitura.",
+        "Sem fundamentos da fonte (a bolsai pode não cobrir este ativo). Cole os dados acima para ver a leitura.",
       ],
     };
   }
@@ -111,15 +101,10 @@ export function lerFundamentos(f: FundamentosEntrada): AnaliseFundamentos {
   }
   if (f.margemLiquida != null) {
     // Margem em PONTOS percentuais (a fonte de fundamentos entrega assim, §6.4):
-    // formata direto, sem a heurística de ×100 do `pctFlex` (que distorceria
-    // margens < 1%, ex.: 0,35 viraria 35%).
+    // formata direto, sem heurística de ×100 (que distorceria margens < 1%, ex.:
+    // 0,35 viraria 35%).
     const margem = `${f.margemLiquida.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
     leitura.push(`Margem líquida de ${margem}: parte da receita que sobra como lucro.`);
-  }
-  if (f.dividendYield != null) {
-    leitura.push(
-      `Dividend yield de ${pctFlex(f.dividendYield)} ao ano: retorno em proventos sobre o preço atual.`,
-    );
   }
 
   const tendencia = tendenciaLucros(f.lucrosPorTrimestre);

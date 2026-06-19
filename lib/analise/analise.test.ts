@@ -15,7 +15,6 @@ const VAZIO: FundamentosEntrada = {
   margemBruta: null,
   margemOperacional: null,
   margemLiquida: null,
-  dividendYield: null,
   lucrosPorTrimestre: [],
 };
 
@@ -26,11 +25,11 @@ describe("fundamentos", () => {
     expect(r.leitura.join(" ")).toMatch(/Cole os dados/);
   });
 
-  it("descreve P/L e DY sem recomendar", () => {
-    const r = lerFundamentos({ ...VAZIO, precoLucro: 8, dividendYield: 0.09 });
+  it("descreve P/L e margem líquida (em pontos) sem recomendar", () => {
+    const r = lerFundamentos({ ...VAZIO, precoLucro: 8, margemLiquida: 21.69 });
     const t = r.leitura.join(" ");
     expect(t).toMatch(/P\/L de 8/);
-    expect(t).toMatch(/9%/); // 0.09 → 9%
+    expect(t).toMatch(/21,7%/); // pontos percentuais, sem dupla conversão
     expect(t).not.toMatch(/compre|venda /i);
   });
 

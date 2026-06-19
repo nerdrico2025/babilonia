@@ -100,7 +100,7 @@ export function BlocoTecnico({
             valor={closesText}
             onChange={setClosesText}
             placeholder={"28,50\n28,90\n29,10\n…"}
-            ajuda="Um por linha. ~20 para médias, ~35 para o MACD. O brapi Free não traz histórico (§6.1)."
+            ajuda="Um por linha. ~20 para médias, ~35 para o MACD. O app não busca histórico automático — cole os fechamentos (§2.4)."
           />
           <AreaColar
             id="tec-volumes"

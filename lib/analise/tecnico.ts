@@ -2,7 +2,7 @@
  * analise/tecnico — análise TÉCNICA do ativo-objeto (§8.2, bloco 1).
  *
  * Módulo PURO e testável. Recebe uma SÉRIE DE FECHAMENTOS (colada pelo usuário,
- * §2.4 — o brapi Free não fornece histórico, §6.1) e calcula os indicadores
+ * §2.4 — o app não busca histórico automático, §2.4) e calcula os indicadores
  * clássicos: médias móveis, RSI, MACD, suporte/resistência e leitura de volume.
  *
  * Encerra com uma LEITURA DE INICIANTE (§9): descreve o que os números sugerem,

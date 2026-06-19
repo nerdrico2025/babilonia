@@ -36,13 +36,13 @@ try {
   // .env.local ausente — usa só o que já está no ambiente (caso de prod/CI).
 }
 
-/** Env vars OBRIGATÓRIAS — espelha o schema de `lib/env.ts` (sem OPLAB_ACCESS_TOKEN). */
+/** Env vars OBRIGATÓRIAS — espelha o schema de `lib/env.ts` (sem OPLAB_ACCESS_TOKEN/BRAPI_TOKEN). */
 const ENV_OBRIGATORIAS = [
   "DATABASE_URL",
   "AUTH_SECRET",
   "AUTH_USERNAME",
   "AUTH_PASSWORD",
-  "BRAPI_TOKEN",
+  "BOLSAI_API_KEY",
 ] as const;
 
 /** Watchlist esperada do MVP (§6.4 / seed-watchlist). */

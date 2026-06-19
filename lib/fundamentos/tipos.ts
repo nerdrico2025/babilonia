@@ -7,12 +7,11 @@
  * importado pela UI, pelas integrações e por qualquer consumidor — todos falam o
  * mesmo vocabulário.
  *
- * Este tipo NÃO é o shape do `BrapiFundamentos`. Ele é desenhado em função dos
- * campos confirmados disponíveis na fonte nova (bolsai — ver
- * `docs/migracao-fundamentos.md`). O `brapi.ts` segue como fonte viva NESTA etapa;
- * a troca de consumidor vem em prompt futuro. Criar o tipo desacoplado primeiro é o
- * mesmo padrão aditivo usado na saída da OpLab: nasce a fonte/tipo novo ao lado,
- * troca-se o consumo, e só então remove-se o antigo.
+ * Este tipo é desenhado em função dos campos confirmados disponíveis na bolsai
+ * (ver `docs/migracao-fundamentos.md`), a fonte ÚNICA de fundamentos hoje. Foi
+ * criado desacoplado da integração pelo mesmo padrão aditivo usado na saída da
+ * OpLab/brapi: nasce a fonte/tipo novo ao lado, troca-se o consumo, e só então
+ * remove-se o antigo (o brapi.ts já foi aposentado, 5.7).
  *
  * ── Decisões fechadas (NÃO reabrir ao ler este código no futuro) ──────────────
  * 1. Margem bruta, margem operacional e a série trimestral de lucros

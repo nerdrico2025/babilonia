@@ -1,5 +1,11 @@
 # brapi.dev API — Contrato Confirmado
 
+> ⚠️ **HISTÓRICO (2026-06-19): o brapi saiu de cogitação e o `lib/integrations/brapi.ts`
+> foi removido.** Fundamentos passaram para a **bolsai** (`docs/migracao-fundamentos.md`),
+> preço do objeto para **COTAHIST EOD** (`acao_cotahist`) e proventos/resultados são
+> **manuais**. Este documento fica só como registro da avaliação anterior — não
+> reintroduzir o brapi.
+
 > Fonte: documentação oficial https://brapi.dev/docs/acoes e https://brapi.dev/pricing (raspadas em 2026-06-15).
 > Status de teste: **não testado ao vivo com token nosso**. Os tickers de teste (PETR4, VALE3, ITUB4, MGLU3) funcionam sem token. Campos do `quote` confirmados pelo exemplo oficial; estrutura de dividendos/fundamentos validada por presença dos nomes na doc (ver "Confiança").
 

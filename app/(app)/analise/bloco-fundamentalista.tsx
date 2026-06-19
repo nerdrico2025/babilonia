@@ -65,7 +65,6 @@ export function BlocoFundamentalista({
       margemBruta: null,
       margemOperacional: null,
       margemLiquida: parseNum(m.margemLiquida) ?? fundamentos?.margemLiquida ?? null,
-      dividendYield: null,
       lucrosPorTrimestre: [],
     }),
     [m, fundamentos],
@@ -122,7 +121,7 @@ export function BlocoFundamentalista({
           </div>
         </details>
 
-        {/* Proventos (brapi) + resultados (input manual, §6.4). */}
+        {/* Proventos + resultados (input manual, §6.4). */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <p className="mb-1.5 flex items-center gap-1 text-[11px] tracking-wide text-muted-foreground uppercase">

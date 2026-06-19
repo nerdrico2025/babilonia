@@ -25,7 +25,7 @@ autodetectado). O build de produção está **verde**. A conexão com o banco é
 
 | Variável | Uso |
 |---|---|
-| `BRAPI_TOKEN` | Cotação (brapi) |
+| `BOLSAI_API_KEY` | Fundamentos (bolsai); preço/cadeia vêm do COTAHIST (público) |
 | `DATABASE_URL` | Postgres no **Neon** (use a connection string *pooled*) |
 | `AUTH_SECRET` | Assinatura da sessão (`openssl rand -base64 32`) |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | Único usuário (mono-usuário) |
@@ -45,8 +45,8 @@ autodetectado). O build de produção está **verde**. A conexão com o banco é
 
 ## 2. Nenhuma chave de API vaza para o cliente (§13/§5.1) — ✅
 
-- `process.env.{BRAPI_TOKEN,AUTH_SECRET,AUTH_PASSWORD}` só aparece
-  em **código de servidor**: `lib/integrations/brapi.ts`, `lib/env.ts`,
+- `process.env.{BOLSAI_API_KEY,AUTH_SECRET,AUTH_PASSWORD}` só aparece
+  em **código de servidor**: `lib/integrations/bolsai.ts`, `lib/env.ts`,
   `auth.ts` e a Server Action/route da tela de Configurações.
 - **Nenhuma** variável `NEXT_PUBLIC_*` (que vazaria ao cliente).
 - Os componentes `"use client"` que tocam tipos das integrações usam **`import type`**
@@ -69,13 +69,14 @@ Todos os testes do Vitest passam (207) e o build de produção conclui sem erros
   *Ressalva:* o login real exige `AUTH_*`/`DATABASE_URL` no ambiente — confirmar no
   smoke test pós-deploy.
 
-- [x] **Integrações com cache funcionando (migração da OpLab concluída).** — ✅
-  A cadeia/IV/gregas vêm do COTAHIST/B3 (ingestão em job) + Black-Scholes próprio;
-  a cotação (brapi) usa `cacheGetOrFetch` (TTL + degradação para cache com aviso). As
-  telas chamam os proxies `app/api/*`. Coberto por `brapi.test.ts`, `routes.test.ts`
-  e os testes de `lib/dados-opcoes/*` (cadeia, volatilidade, gregas).
-  *Ressalva:* a cotação ao vivo depende do `BRAPI_TOKEN` — validar no smoke test; o
-  caminho de runtime e a resiliência estão testados.
+- [x] **Integrações com cache funcionando (migração da OpLab e do brapi concluída).** — ✅
+  A cadeia/IV/gregas e o preço do objeto vêm do COTAHIST/B3 (ingestão em job) +
+  Black-Scholes próprio; os fundamentos vêm da **bolsai** com frescor pela tabela
+  `fundamentos` (degradação para a linha antiga com aviso). As telas chamam os
+  proxies `app/api/*`. Coberto por `bolsai.test.ts`, `repositorio.test.ts`,
+  `routes.test.ts` e os testes de `lib/dados-opcoes/*` (cadeia, volatilidade, gregas).
+  *Ressalva:* os fundamentos dependem do `BOLSAI_API_KEY` — validar no smoke test; o
+  preço/cadeia (COTAHIST) e a resiliência estão testados.
 
 - [x] **Montador calcula risco máx., ganho máx. e breakeven corretos (casos
   conhecidos).** — ✅

@@ -9,9 +9,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
 > A fonte da verdade é o PRD (`docs/PRD_Babilonia.md` §6.2/§18.1) e o `CLAUDE.md`.
 > Este resumo evita que decisões já fechadas sejam reintroduzidas erradas.
 
-**A OpLab saiu de cogitação.** Não consumir OpLab, `Access-Token`, plano PRO nem
-`/market/options/bs`. Fontes atuais:
+**A OpLab e o brapi saíram de cogitação.** Não consumir OpLab (`Access-Token`,
+plano PRO, `/market/options/bs`) nem brapi (`BRAPI_TOKEN`, `getCotacao`,
+`getFundamentos`, `getCalendario*` — o `brapi.ts` foi removido). Fontes atuais:
 
+- **Fundamentos:** **bolsai** (`lib/integrations/bolsai.ts`, chave `BOLSAI_API_KEY`),
+  gravados na tabela `fundamentos`. **Dividend yield removido do produto.**
+  Percentuais em **pontos** (não normalizar). Detalhes: `docs/migracao-fundamentos.md`.
+- **Preço do ativo-objeto:** **COTAHIST EOD** (`acao_cotahist`) — não cotação ao
+  vivo; a UI mostra aviso datado de fechamento.
+- **Proventos e calendário de resultados:** **manuais** (busca automática desligada).
 - **Cadeia de opções:** arquivos públicos **COTAHIST (B3)** — dado de **fechamento
   (EOD), não tempo real**. Ingerido em **job** (download + parse → Postgres), não
   por request-por-tela. Filtrar `TPMERC ∈ {070 CALL, 080 PUT}`.
@@ -31,5 +38,5 @@ Detalhes: `docs/apis/b3-cotahist.md`, `docs/apis/bcb-sgs.md`,
 
 Só **opções**, nunca ações à vista. **Risco antes do ganho**, com rótulo
 **DEFINIDO/INDEFINIDO**. **Decisão é sempre do usuário** (não é consultoria).
-**Nenhuma chave/segredo no cliente** (`BRAPI_TOKEN` server-only; COTAHIST e SGS são
-públicos).
+**Nenhuma chave/segredo no cliente** (`BOLSAI_API_KEY` server-only; COTAHIST e SGS
+são públicos).

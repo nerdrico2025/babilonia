@@ -21,8 +21,7 @@
  *  - `null` é valor REAL emitido pela API; valores negativos ou "fora da faixa"
  *    (P/L negativo, margem > 100) são dados legítimos — o schema não os rejeita.
  *
- * Este passo é ADITIVO: cria o client isolado, sem tocar em `brapi.ts` nem em
- * nenhum consumidor. A troca de consumo vem em passo posterior.
+ * É a fonte ÚNICA de fundamentos do app (o brapi foi aposentado, 5.7).
  */
 
 import { z } from "zod";

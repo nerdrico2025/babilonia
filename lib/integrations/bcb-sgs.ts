@@ -26,7 +26,7 @@ import { z } from "zod";
 import { cacheGetOrFetch, storePadrao } from "./cache";
 import type { OpcoesBusca, ResultadoIntegracao } from "./cache";
 
-// Reexporta o núcleo de cache para consumidores/testes (mesmo padrão de brapi.ts).
+// Reexporta o núcleo de cache para consumidores/testes (mesmo padrão de bolsai.ts).
 export {
   criarCacheStoreDrizzle,
   IntegracaoIndisponivelError as BcbSgsIndisponivelError,

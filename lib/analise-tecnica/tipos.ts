@@ -61,3 +61,44 @@ export interface SuporteResistenciaProximos {
   suporte: NivelSR | null;
   resistencia: NivelSR | null;
 }
+
+// ── Análise técnica completa (T3 — orquestração) ──────────────────────────────
+// Resumo ESTRUTURADO (só números e sinalizações), sem texto de "leitura de
+// iniciante" — isso é trabalho de UI/T4. Cada indicador é nulável individualmente:
+// com poucos candles, MM200/MACD ainda nascem `null` enquanto MM9/RSI já têm valor.
+
+/** Médias móveis (últimos valores) + cruzamentos recentes entre elas. */
+export interface MediasMoveis {
+  mm9: number | null;
+  mm21: number | null;
+  mm50: number | null;
+  mm200: number | null;
+  /** Cruzamento recente MM9 × MM21 (curto prazo). */
+  cruzamento9x21: DirecaoCruzamento | null;
+  /** Cruzamento recente MM50 × MM200 (golden/death cross). */
+  cruzamento50x200: DirecaoCruzamento | null;
+}
+
+/** MACD no ponto mais recente + se a linha cruzou o sinal recentemente. */
+export interface MacdResumo {
+  linha: number | null;
+  sinal: number | null;
+  histograma: number | null;
+  /** Cruzamento recente da linha MACD × linha de sinal. */
+  cruzamento: DirecaoCruzamento | null;
+}
+
+/** Pacote técnico completo do ativo, pronto para a UI consumir (sem texto). */
+export interface AnaliseTecnica {
+  ticker: string;
+  /** Data (ISO) do candle mais recente — frescor para a UI carimbar. */
+  dataReferencia: string;
+  /** Nº de candles usados no cálculo. */
+  pontos: number;
+  /** Preço atual = fechamento do candle mais recente (mesma fonte do Bloco Técnico). */
+  precoAtual: number;
+  medias: MediasMoveis;
+  rsi14: number | null;
+  macd: MacdResumo;
+  suporteResistencia: SuporteResistenciaProximos;
+}

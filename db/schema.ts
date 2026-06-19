@@ -19,6 +19,7 @@ import {
   text,
   jsonb,
   timestamp,
+  date,
   boolean,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -365,6 +366,66 @@ export const ivHistory = pgTable(
   ],
 );
 
+// ── fundamentos (espelho do client bolsai) ──────────────────────────────────
+// Uma linha por ativo-objeto com os fundamentos vindos da bolsai
+// (`lib/integrations/bolsai.ts`). É ESPELHO 1:1 do client: cada coluna mapeia um
+// campo do tipo de domínio `Fundamentos` (`lib/fundamentos/tipos.ts`).
+//
+// SEM campos de override manual — por decisão de produto já fechada
+// (docs/migracao-fundamentos.md): dividend yield, margens bruta/operacional,
+// proventos e calendário de resultados são tratados FORA desta tabela. Logo, NÃO
+// há merge campo a campo: um refetch faz upsert por `ticker` e SUBSTITUI a linha
+// inteira (não preserva nada "digitado", pois não há nada digitado aqui).
+//
+// `data_referencia` = trimestre de referência do dado na fonte (reference_date,
+// YYYY-MM-DD). `atualizado_em` = quando NÓS gravamos/atualizamos a linha — são
+// coisas distintas. Percentuais (margem_liquida, roe, roic, roa) ficam em PONTOS
+// percentuais, como vêm da bolsai (não normalizados — §6.4).
+export const fundamentos = pgTable("fundamentos", {
+  id: serial("id").primaryKey(),
+  /** Ativo-objeto (ex.: "PETR4") — único; chave do upsert. */
+  ticker: text("ticker").notNull().unique(),
+
+  // Múltiplos e percentuais (adimensionais) — numeric(16,2), mesma precisão das
+  // tabelas monetárias (§7). Todos nullable: a bolsai emite `null` real.
+  /** P/L (pl). */
+  precoLucro: numeric("preco_lucro", { precision: 16, scale: 2 }),
+  /** EV/EBITDA (ev_ebitda). */
+  evEbitda: numeric("ev_ebitda", { precision: 16, scale: 2 }),
+  /** P/VP (pvp). */
+  precoValorPatrimonial: numeric("preco_valor_patrimonial", { precision: 16, scale: 2 }),
+  /** Margem líquida (net_margin), em pontos percentuais. */
+  margemLiquida: numeric("margem_liquida", { precision: 16, scale: 2 }),
+  /** ROE (roe), em pontos percentuais. */
+  roe: numeric("roe", { precision: 16, scale: 2 }),
+  /** ROIC (roic), em pontos percentuais. */
+  roic: numeric("roic", { precision: 16, scale: 2 }),
+  /** ROA (roa), em pontos percentuais. */
+  roa: numeric("roa", { precision: 16, scale: 2 }),
+
+  // Valores em BRL (lpa/vpa por ação; market_cap/lucro_liquido/ebitda absolutos).
+  /** Lucro por ação (lpa), BRL. */
+  lpa: brl("lpa"),
+  /** Valor patrimonial por ação (vpa), BRL. */
+  vpa: brl("vpa"),
+  /** Valor de mercado (market_cap), BRL. */
+  marketCap: brl("market_cap"),
+  /** Lucro líquido pontual (net_income), BRL — NÃO é série trimestral. */
+  lucroLiquido: brl("lucro_liquido"),
+  /** EBITDA (ebitda), BRL. */
+  ebitda: brl("ebitda"),
+
+  /** reference_date da bolsai (YYYY-MM-DD) — trimestre de referência do dado. */
+  dataReferencia: date("data_referencia").notNull(),
+  /** Nome da empresa (corporate_name), nullable. */
+  nomeEmpresa: text("nome_empresa"),
+
+  /** Quando a LINHA foi gravada/atualizada no nosso banco (≠ data_referencia). */
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // ── api_cache ────────────────────────────────────────────────────────────────
 // Cache genérico das integrações com chave (hoje brapi) com TTL (§6.3). A camada
 // de integração grava aqui o payload JSON e a data de expiração.
@@ -420,5 +481,7 @@ export type AcaoCotahist = typeof acaoCotahist.$inferSelect;
 export type NewAcaoCotahist = typeof acaoCotahist.$inferInsert;
 export type IvHistory = typeof ivHistory.$inferSelect;
 export type NewIvHistory = typeof ivHistory.$inferInsert;
+export type Fundamentos = typeof fundamentos.$inferSelect;
+export type NewFundamentos = typeof fundamentos.$inferInsert;
 export type ApiCache = typeof apiCache.$inferSelect;
 export type NewApiCache = typeof apiCache.$inferInsert;

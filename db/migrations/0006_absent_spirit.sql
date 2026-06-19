@@ -1,0 +1,20 @@
+CREATE TABLE "fundamentos" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"ticker" text NOT NULL,
+	"preco_lucro" numeric(16, 2),
+	"ev_ebitda" numeric(16, 2),
+	"preco_valor_patrimonial" numeric(16, 2),
+	"margem_liquida" numeric(16, 2),
+	"roe" numeric(16, 2),
+	"roic" numeric(16, 2),
+	"roa" numeric(16, 2),
+	"lpa" numeric(16, 2),
+	"vpa" numeric(16, 2),
+	"market_cap" numeric(16, 2),
+	"lucro_liquido" numeric(16, 2),
+	"ebitda" numeric(16, 2),
+	"data_referencia" date NOT NULL,
+	"nome_empresa" text,
+	"atualizado_em" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "fundamentos_ticker_unique" UNIQUE("ticker")
+);

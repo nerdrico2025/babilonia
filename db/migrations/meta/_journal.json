@@ -43,6 +43,13 @@
       "when": 1781745416393,
       "tag": "0005_omniscient_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781869564988,
+      "tag": "0006_absent_spirit",
+      "breakpoints": true
     }
   ]
 }

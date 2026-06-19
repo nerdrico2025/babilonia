@@ -13,13 +13,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 
-vi.mock("@/lib/integrations/brapi", () => ({
-  getCalendarioProventos: vi.fn(),
-  getCalendarioResultados: vi.fn(),
-}));
-
 // /api/ativo agora consome o preço EOD (acao_cotahist) + fundamentos (bolsai via
-// repositório de frescor) — não mais o brapi.
+// repositório de frescor) — não mais o brapi. /api/calendario foi desligado (5.6)
+// e não chama mais nenhuma integração. Nenhuma rota usa brapi nesta suíte.
 vi.mock("@/lib/dados-opcoes/comum", () => ({ buscarCotacaoEodAtivo: vi.fn() }));
 vi.mock("@/lib/fundamentos/repositorio", () => ({ obterFundamentos: vi.fn() }));
 
@@ -29,7 +25,6 @@ vi.mock("@/lib/dados-opcoes/volatilidade", () => ({ getVolatilidadeCotahist: vi.
 vi.mock("@/lib/dados-opcoes/gregas", () => ({ getGregasCotahist: vi.fn() }));
 
 import { auth } from "@/auth";
-import * as brapi from "@/lib/integrations/brapi";
 import * as dadosComum from "@/lib/dados-opcoes/comum";
 import * as repoFund from "@/lib/fundamentos/repositorio";
 import * as dadosCadeia from "@/lib/dados-opcoes/cadeia";
@@ -354,17 +349,8 @@ describe("GET /api/gregas — gregas por opção via Black-Scholes (COTAHIST)", 
 
 // ── /api/calendario/{ticker} ─────────────────────────────────────────────────
 
-describe("GET /api/calendario/{ticker} — proventos + resultados (brapi)", () => {
-  it("devolve proventos com frescor e a indisponibilidade honesta de resultados", async () => {
-    vi.mocked(brapi.getCalendarioProventos).mockResolvedValue(
-      resultado([{ dataPagamento: "2026-05-20", valor: 0.95 }]) as never,
-    );
-    vi.mocked(brapi.getCalendarioResultados).mockReturnValue({
-      disponivel: false,
-      motivo: "O brapi não fornece... (§6.4).",
-      fonteAlternativa: "input manual (§8.2).",
-    } as never);
-
+describe("GET /api/calendario/{ticker} — busca automática DESLIGADA (5.6)", () => {
+  it("devolve proventos e resultados como indisponíveis tipados (sem rede)", async () => {
     const resp = await getCalendario(
       new Request("http://localhost/api/calendario/petr4"),
       ctx({ ticker: "petr4" }),
@@ -372,24 +358,31 @@ describe("GET /api/calendario/{ticker} — proventos + resultados (brapi)", () =
     expect(resp.status).toBe(200);
     const body = await resp.json();
 
-    expect(body.ticker).toBe("PETR4");
-    expect(body.proventos).toHaveLength(1);
-    expect(body.frescor.proventos.origem).toBe("rede");
-    // Não inventa calendário de resultados (§6.4 / §2.4).
+    expect(body.ticker).toBe("PETR4"); // normalizado (uppercase)
+    // Mesmo formato { disponivel:false, motivo, fonteAlternativa } para AMBOS.
+    expect(body.proventos.disponivel).toBe(false);
+    expect(body.proventos.motivo).toMatch(/não é obtido automaticamente/i);
+    expect(body.proventos.fonteAlternativa).toMatch(/corretora|manual/i);
     expect(body.resultados.disponivel).toBe(false);
     expect(body.resultados.fonteAlternativa).toMatch(/manual/i);
+    // Sem frescor: não há dado automático com data de origem.
+    expect(body.frescor).toBeUndefined();
   });
 
-  it("proventos sem cache (IntegracaoIndisponivelError) → 503", async () => {
-    vi.mocked(brapi.getCalendarioResultados).mockReturnValue({ disponivel: false } as never);
-    vi.mocked(brapi.getCalendarioProventos).mockRejectedValue(
-      new IntegracaoIndisponivelError("brapi:proventos:PETR4", new Error("x")),
+  it("ticker inválido → 400 (Zod)", async () => {
+    const resp = await getCalendario(
+      new Request("http://localhost/api/calendario/123"),
+      ctx({ ticker: "123" }),
     );
+    expect(resp.status).toBe(400);
+  });
 
+  it("sem sessão → 401", async () => {
+    vi.mocked(auth).mockResolvedValue(null as never);
     const resp = await getCalendario(
       new Request("http://localhost/api/calendario/PETR4"),
       ctx({ ticker: "PETR4" }),
     );
-    expect(resp.status).toBe(503);
+    expect(resp.status).toBe(401);
   });
 });

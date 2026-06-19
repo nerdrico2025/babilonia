@@ -6,7 +6,6 @@
  */
 
 import type { Fundamentos } from "@/lib/fundamentos/tipos";
-import type { BrapiProvento } from "@/lib/integrations/brapi";
 import type { CadeiaOpcoes, VolatilidadeAtivo } from "@/lib/opcoes/tipos";
 
 /** Metadado de frescor (§6.3), espelhando `Frescor` do Route Handler. */
@@ -48,10 +47,23 @@ export interface RespostaCadeia {
   frescor: { cadeia: Frescor; volatilidade: Frescor | null };
 }
 
-/** GET /api/calendario/{ticker}. */
+/**
+ * Sinalização honesta de evento NÃO obtido automaticamente (§2.4, §6.4) — mesmo
+ * formato de `ResultadosIndisponivel`. Proventos e resultados são MANUAIS: a tela
+ * mostra `motivo` + `fonteAlternativa`, nunca uma lista vazia silenciosa.
+ */
+export interface EventosIndisponivel {
+  disponivel: false;
+  motivo: string;
+  fonteAlternativa: string;
+}
+
+/**
+ * GET /api/calendario/{ticker}. A busca automática foi DESLIGADA (5.6): proventos
+ * e resultados vêm como indisponíveis tipados (sem rede, sem frescor).
+ */
 export interface RespostaCalendario {
   ticker: string;
-  proventos: BrapiProvento[];
-  resultados: { disponivel: false; motivo: string; fonteAlternativa: string };
-  frescor: { proventos: Frescor };
+  proventos: EventosIndisponivel;
+  resultados: EventosIndisponivel;
 }

@@ -13,9 +13,14 @@ import { BlocoTecnico } from "./bloco-tecnico";
 import { BlocoVolatilidade } from "./bloco-volatilidade";
 import type { RespostaAtivo, RespostaCadeia, RespostaCalendario } from "./tipos";
 
-// Texto padrão sobre resultados (espelha a sinalização honesta do §6.4).
+// Fallbacks da sinalização honesta (§2.4/§6.4) caso a rota /api/calendario não
+// responda — proventos e resultados são manuais (5.6).
+const PROVENTOS_PADRAO = {
+  motivo: "O calendário de proventos não é obtido automaticamente.",
+  fonteAlternativa: "Confira na sua corretora ou use o campo de data manual ao montar o ticket.",
+};
 const RESULTADOS_PADRAO = {
-  motivo: "O brapi não fornece calendário de divulgação de resultados (§6.4).",
+  motivo: "O calendário de divulgação de resultados não é obtido automaticamente (§6.4).",
   fonteAlternativa: "Informe a data manualmente (RI da empresa, B3, Status Invest).",
 };
 
@@ -32,8 +37,9 @@ async function buscarJson<T>(url: string): Promise<T | null> {
 /**
  * `<AnaliseCliente>` — a tela 4 (§8.2, §9). Busca um ticker e reúne, em três
  * blocos (técnico, fundamentalista, volatilidade), os dados das rotas
- * `/api/ativo` (brapi), `/api/cadeia` (COTAHIST) e `/api/calendario` (brapi). Cada
- * bloco degrada sozinho: se uma fonte falhar, os outros blocos seguem, e o
+ * `/api/ativo` (preço EOD/COTAHIST + fundamentos bolsai), `/api/cadeia` (COTAHIST)
+ * e `/api/calendario` (proventos/resultados manuais — busca automática desligada,
+ * 5.6). Cada bloco degrada sozinho: se uma fonte falhar, os outros seguem, e o
  * usuário pode colar dados (§2.4). Nenhuma recomendação — só leitura (§9).
  */
 export function AnaliseCliente() {
@@ -122,10 +128,9 @@ export function AnaliseCliente() {
 
           <BlocoFundamentalista
             fundamentos={dadosAtivo.fundamentos}
-            proventos={dadosCalendario?.proventos ?? []}
+            proventosInfo={dadosCalendario?.proventos ?? PROVENTOS_PADRAO}
             resultadosInfo={dadosCalendario?.resultados ?? RESULTADOS_PADRAO}
             frescorFundamentos={dadosAtivo.frescor.fundamentos}
-            frescorProventos={dadosCalendario?.frescor.proventos ?? dadosAtivo.frescor.preco}
           />
 
           <BlocoVolatilidade

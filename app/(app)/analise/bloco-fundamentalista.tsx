@@ -16,12 +16,10 @@ import {
   lerFundamentos,
   type FundamentosEntrada,
 } from "@/lib/analise/fundamentos";
-import { formatPreco } from "@/lib/format";
 import type { Fundamentos } from "@/lib/fundamentos/tipos";
-import type { BrapiProvento } from "@/lib/integrations/brapi";
 
 import { FrescorBadge, Indicador, LeituraIniciante } from "./analise-ui";
-import type { Frescor } from "./tipos";
+import type { EventosIndisponivel, Frescor } from "./tipos";
 
 // pt-BR → número, ou null se vazio/ inválido.
 function parseNum(s: string): number | null {
@@ -31,35 +29,26 @@ function parseNum(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function fmtData(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }).format(d);
-}
-
 /**
  * Bloco 2 — Fundamentalista (§8.2). Múltiplos e retornos vêm da bolsai
  * (`obterFundamentos`); o usuário ainda pode COLAR/editar os múltiplos quando a
  * fonte não cobre (§2.4). Os percentuais (margem líquida, ROE, ROIC, ROA) chegam
  * em PONTOS PERCENTUAIS (ex.: 21,69 = 21,69%) — exibidos como `%` SEM conversão.
- * Mostra também proventos (brapi) e o calendário de resultados (input manual,
- * §6.4). Encerra com a leitura de iniciante (§9). Sem dividend yield (a bolsai não
- * fornece e a decisão de produto o removeu da tela).
+ * Proventos e calendário de resultados NÃO são obtidos automaticamente (5.6): a
+ * tela exibe a sinalização honesta (motivo + fonte alternativa), nunca uma lista
+ * vazia silenciosa. Encerra com a leitura de iniciante (§9). Sem dividend yield (a
+ * bolsai não fornece e a decisão de produto o removeu da tela).
  */
 export function BlocoFundamentalista({
   fundamentos,
-  proventos,
+  proventosInfo,
   resultadosInfo,
   frescorFundamentos,
-  frescorProventos,
 }: {
   fundamentos: Fundamentos | null;
-  proventos: BrapiProvento[];
+  proventosInfo: { motivo: string; fonteAlternativa: string };
   resultadosInfo: { motivo: string; fonteAlternativa: string };
   frescorFundamentos: Frescor | null;
-  frescorProventos: Frescor;
 }) {
   // Edição manual dos múltiplos (preenche/sobrescreve o que a fonte não trouxe).
   const [m, setM] = useState({ precoLucro: "", evEbitda: "", pvp: "", margemLiquida: "" });
@@ -83,12 +72,6 @@ export function BlocoFundamentalista({
   );
 
   const analise = useMemo(() => lerFundamentos(entrada), [entrada]);
-
-  // Próximos proventos (ordena por data de pagamento desc, mostra até 4).
-  const proventosOrdenados = [...proventos]
-    .filter((p) => p.dataPagamento)
-    .sort((a, b) => (a.dataPagamento! < b.dataPagamento! ? 1 : -1))
-    .slice(0, 4);
 
   return (
     <Card>
@@ -142,28 +125,13 @@ export function BlocoFundamentalista({
         {/* Proventos (brapi) + resultados (input manual, §6.4). */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="mb-1.5 flex items-center justify-between text-[11px] tracking-wide text-muted-foreground uppercase">
-              <span className="inline-flex items-center gap-1">
-                <CalendarDays className="size-3.5" aria-hidden /> Proventos
-              </span>
-              <FrescorBadge frescor={frescorProventos} />
+            <p className="mb-1.5 flex items-center gap-1 text-[11px] tracking-wide text-muted-foreground uppercase">
+              <CalendarDays className="size-3.5" aria-hidden /> Proventos
             </p>
-            {proventosOrdenados.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhum provento informado pela fonte (pode exigir plano pago).
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-1 text-sm">
-                {proventosOrdenados.map((p, i) => (
-                  <li key={i} className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">
-                      {p.tipo ?? "Provento"} · {fmtData(p.dataPagamento)}
-                    </span>
-                    <span className="tabular">{p.valor != null ? formatPreco(p.valor) : "—"}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* Indisponível por design (5.6) — mensagem neutra, NÃO lista vazia. */}
+            <p className="text-sm text-muted-foreground">
+              {proventosInfo.motivo} {proventosInfo.fonteAlternativa}
+            </p>
           </div>
           <div>
             <p className="mb-1.5 text-[11px] tracking-wide text-muted-foreground uppercase">

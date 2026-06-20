@@ -121,13 +121,20 @@ Mono-repo leve: o serviço de **quant pesado** vive em `services/quant/`, mas é
 deploy próprio no **Railway**). O Next.js o consome por **HTTP** (a Route
 Handler que chama o serviço ainda **não** existe — próximo prompt).
 
-- **Para que serve** (implementado em prompts futuros): screening da cadeia
-  inteira, backtesting, superfície de IV — exatamente o quant que o Next.js não
-  deve fazer.
-- **Fronteira dura — o que NUNCA faz:** não decide/recomenda ordens; não persiste
-  `position`/book/ticket (só o Next.js escreve no banco); **não duplica
-  `lib/options-math` nem o motor Black-Scholes (TS)** — esse motor é a fonte da
-  verdade do pricing/IV.
+- **Para que serve:** `POST /screening` (✅ implementado) varre toda a
+  `opcao_cotahist` de um ativo (ou da watchlist) e ranqueia estruturas de risco
+  DEFINIDO por `ganho/risco`, com filtro de liquidez e de capital, devolvendo
+  tickers exatos/strikes/prêmios para o ticket. Backtesting e superfície de IV
+  vêm depois. (A Route Handler do Next.js que consome o `/screening` ainda não
+  existe — próximo prompt.)
+- **Fronteira dura — o que NUNCA faz:** não decide/recomenda ordens (o payload do
+  screening diz que é **TRIAGEM**); não persiste `position`/book/ticket (só o
+  Next.js escreve no banco); **não duplica o motor Black-Scholes (TS)**.
+- **Cópia paralela consciente:** para varrer a cadeia em Python, o serviço
+  REIMPLEMENTA em paralelo a parte payoff/risco/ganho/breakeven do
+  `lib/options-math` e o filtro de `lib/liquidez.ts`. O **TS segue como fonte da
+  verdade**; as duas cópias têm de ser mantidas consistentes — os testes Python
+  usam os MESMOS casos numéricos do §18 que os do TS.
 - **Banco:** lê o **mesmo Neon Postgres** (sua própria `DATABASE_URL` do `.env`,
   nunca hardcoded), **somente leitura** de `opcao_cotahist`, `acao_cotahist` e
   `iv_history` (conexão abre com `default_transaction_read_only=on`).

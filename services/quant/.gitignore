@@ -1,0 +1,13 @@
+# Segredos — só placeholders no .env.example
+.env
+.env.local
+
+# Ambiente virtual / uv
+.venv/
+
+# Caches Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

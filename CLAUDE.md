@@ -110,7 +110,29 @@ lib/
   utils.ts        helpers de UI (shadcn)
 db/               schema Drizzle + migrations (inclui iv_history, §7)
 docs/             PRD, contratos de API (docs/apis/) e design (docs/design/)
+services/
+  quant/          microserviço Python (FastAPI) — quant pesado, isolado (ver abaixo)
 ```
+
+## Microserviço de quant (`services/quant/`) — §4.1 / Fase 3 (§15)
+
+Mono-repo leve: o serviço de **quant pesado** vive em `services/quant/`, mas é
+**independente** do Next.js (Python 3.12 + FastAPI, deps próprias via **uv**,
+deploy próprio no **Railway**). O Next.js o consome por **HTTP** (a Route
+Handler que chama o serviço ainda **não** existe — próximo prompt).
+
+- **Para que serve** (implementado em prompts futuros): screening da cadeia
+  inteira, backtesting, superfície de IV — exatamente o quant que o Next.js não
+  deve fazer.
+- **Fronteira dura — o que NUNCA faz:** não decide/recomenda ordens; não persiste
+  `position`/book/ticket (só o Next.js escreve no banco); **não duplica
+  `lib/options-math` nem o motor Black-Scholes (TS)** — esse motor é a fonte da
+  verdade do pricing/IV.
+- **Banco:** lê o **mesmo Neon Postgres** (sua própria `DATABASE_URL` do `.env`,
+  nunca hardcoded), **somente leitura** de `opcao_cotahist`, `acao_cotahist` e
+  `iv_history` (conexão abre com `default_transaction_read_only=on`).
+- **Saúde:** `GET /health` — o Next.js confere que o serviço está de pé antes de
+  disparar um cálculo. Detalhes de rodar/testar/deploy em `services/quant/README.md`.
 
 ## Convenções
 

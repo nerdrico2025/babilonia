@@ -1,0 +1,30 @@
+[project]
+name = "babilonia-quant"
+version = "0.1.0"
+description = "Microserviço de quant pesado do Babilônia (FastAPI). Screening de cadeia, backtesting e superfície de IV — consumido por HTTP pelo Next.js (PRD §4.1 / §15 Fase 3)."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic-settings>=2.6.0",
+    "psycopg[binary]>=3.2.0",
+]
+
+[dependency-groups]
+# Dependências de desenvolvimento/teste (não vão para a imagem de produção).
+dev = [
+    "pytest>=8.3.0",
+    "httpx>=0.28.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

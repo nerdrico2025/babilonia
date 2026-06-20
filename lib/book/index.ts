@@ -16,6 +16,7 @@
  * `maxRisk` diretamente como exposição.
  */
 
+import { TAMANHO_LOTE_PADRAO, type LadoOperacao } from "@/lib/options-math";
 import {
   RISK_LIMITS,
   diasUteisEntre,
@@ -197,6 +198,49 @@ export function resumirBook(
     vencimentoMaisProximo,
     diasAteVencimentoMaisProximo,
   };
+}
+
+// ── P&L realizado (encerramento) ──────────────────────────────────────────────
+
+/** Uma perna para apurar o resultado realizado: lado + prêmios de abertura/fechamento. */
+export interface PernaRealizada {
+  /** Lado da perna na ABERTURA (`compra` = long, `venda` = short). */
+  side: LadoOperacao;
+  /** Quantidade em contratos (lotes). */
+  quantity: number;
+  /** Prêmio unitário de ABERTURA (BRL por ação). */
+  premioAbertura: number;
+  /** Prêmio unitário de FECHAMENTO (BRL por ação) — para zerar a perna. */
+  premioFechamento: number;
+}
+
+/**
+ * P&L REALIZADO de uma operação ao fechar, em BRL. FUNÇÃO PURA.
+ *
+ * Fórmula (mesma convenção de sinal do payoff em `lib/options-math`, trocando o
+ * intrínseco no vencimento pelo PRÊMIO DE FECHAMENTO):
+ *
+ *     resultado = Σ  sinal · (premioFechamento − premioAbertura) · quantity · lote
+ *     sinal = +1 (compra)   ·   −1 (venda)
+ *
+ * Lendo por lado (= "valor recebido na abertura − valor pago no fechamento, ou o
+ * inverso"):
+ *  - COMPRA (long): pagou na abertura, recebe ao vender no fechamento →
+ *    resultado = (fechamento − abertura) · qtd · lote (sinal +1).
+ *  - VENDA (short): recebeu na abertura, paga ao recomprar no fechamento →
+ *    resultado = (abertura − fechamento) · qtd · lote (sinal −1).
+ *
+ * Valores POR AÇÃO; multiplica por `quantity` (contratos) × `tamanhoLote` (100 na
+ * B3, default `TAMANHO_LOTE_PADRAO`) — igual ao resto do `options-math`.
+ */
+export function plRealizado(
+  pernas: readonly PernaRealizada[],
+  tamanhoLote: number = TAMANHO_LOTE_PADRAO,
+): number {
+  return pernas.reduce((acc, p) => {
+    const sinal = p.side === "compra" ? 1 : -1;
+    return acc + sinal * (p.premioFechamento - p.premioAbertura) * p.quantity * tamanhoLote;
+  }, 0);
 }
 
 /** Avaliação de proximidade de vencimento de UMA posição (§10, ~5 dias úteis). */

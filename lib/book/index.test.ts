@@ -8,7 +8,9 @@ import { describe, expect, it } from "vitest";
 import {
   resumirBook,
   avaliarVencimento,
+  plRealizado,
   BOOK_LIMITES,
+  type PernaRealizada,
   type PosicaoAberta,
 } from "./index";
 
@@ -125,5 +127,62 @@ describe("avaliarVencimento", () => {
   it("vermelho e urgente quando ≤1 dia útil ou vencido", () => {
     expect(avaliarVencimento(1).urgente).toBe(true);
     expect(avaliarVencimento(0).semaforo).toBe("vermelho");
+  });
+});
+
+// ── plRealizado (P&L realizado ao fechar) ─────────────────────────────────────
+
+describe("plRealizado", () => {
+  // CASO 1 — Trava de ALTA de DÉBITO (bull call spread), fechada com LUCRO.
+  // Caso construído à mão (verificável; mesmo rigor dos testes de options-math).
+  //   Abertura: compra CALL K40 @ 2,00 ; venda CALL K44 @ 0,80  → débito 1,20/ação.
+  //   Fechamento: vende a comprada @ 3,50 ; recompra a vendida @ 1,30.
+  //   Perna compra: (3,50 − 2,00)·1·100 = +150
+  //   Perna venda : −(1,30 − 0,80)·1·100 = −50
+  //   Total = +100,00 (lucro).
+  it("trava de débito fechada com lucro → +100,00", () => {
+    const pernas: PernaRealizada[] = [
+      { side: "compra", quantity: 1, premioAbertura: 2.0, premioFechamento: 3.5 },
+      { side: "venda", quantity: 1, premioAbertura: 0.8, premioFechamento: 1.3 },
+    ];
+    expect(plRealizado(pernas)).toBeCloseTo(100, 6);
+  });
+
+  // CASO 2 — Mesma trava de débito, fechada com PREJUÍZO.
+  //   Abertura idêntica (débito 1,20/ação).
+  //   Fechamento: vende a comprada @ 1,00 ; recompra a vendida @ 0,50.
+  //   Perna compra: (1,00 − 2,00)·1·100 = −100
+  //   Perna venda : −(0,50 − 0,80)·1·100 = +30
+  //   Total = −70,00 (prejuízo).
+  it("trava de débito fechada com prejuízo → −70,00", () => {
+    const pernas: PernaRealizada[] = [
+      { side: "compra", quantity: 1, premioAbertura: 2.0, premioFechamento: 1.0 },
+      { side: "venda", quantity: 1, premioAbertura: 0.8, premioFechamento: 0.5 },
+    ];
+    expect(plRealizado(pernas)).toBeCloseTo(-70, 6);
+  });
+
+  // BORDA — lados OPOSTOS com os MESMOS números trocam só o sinal do resultado.
+  it("inverter o lado (compra↔venda) inverte o sinal da contribuição", () => {
+    const base = { quantity: 1, premioAbertura: 1.0, premioFechamento: 1.5 } as const;
+    const comprado = plRealizado([{ side: "compra", ...base }]); // (1,5−1,0)·100 = +50
+    const vendido = plRealizado([{ side: "venda", ...base }]); // −(1,5−1,0)·100 = −50
+    expect(comprado).toBeCloseTo(50, 6);
+    expect(vendido).toBeCloseTo(-50, 6);
+    expect(vendido).toBeCloseTo(-comprado, 6);
+  });
+
+  it("respeita quantidade (contratos) e tamanho do lote", () => {
+    const pernas: PernaRealizada[] = [
+      { side: "compra", quantity: 3, premioAbertura: 1.0, premioFechamento: 1.2 },
+    ];
+    // (1,2−1,0)·3·100 = 60
+    expect(plRealizado(pernas)).toBeCloseTo(60, 6);
+    // Lote custom (ex.: 1) escala junto: 0,2·3·1 = 0,6
+    expect(plRealizado(pernas, 1)).toBeCloseTo(0.6, 6);
+  });
+
+  it("sem pernas → 0", () => {
+    expect(plRealizado([])).toBe(0);
   });
 });

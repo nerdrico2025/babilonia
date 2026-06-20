@@ -22,6 +22,7 @@ import {
   date,
   boolean,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /** Precisão padrão para valores em BRL (até bilhões, 2 casas). */
@@ -101,6 +102,33 @@ export const position = pgTable("position", {
   riskDefined: boolean("risk_defined").notNull(),
   /** Ponto(s) de equilíbrio (array de preços). */
   breakevens: jsonb("breakevens").$type<number[]>().notNull().default([]),
+
+  // ── Ciclo de vida (encerramento/rolagem) ───────────────────────────────────
+  // TODOS nullable: só preenchidos NA TRANSIÇÃO (encerrar/rolar), nunca na
+  // criação (a position nasce "aberta" com estes em null). A escrita do estado é
+  // do passo H2 (Server Action) — aqui é só o schema.
+  /** Quando a posição foi encerrada ou rolada (null enquanto aberta). */
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  /**
+   * Valor de SAÍDA que apura o resultado: o débito/crédito LÍQUIDO de fechamento
+   * das pernas, POR AÇÃO em BRL (mesma unidade dos prêmios) — NÃO o preço do
+   * ativo-objeto. Numa estrutura, é a soma dos prêmios para zerar cada perna; o
+   * sinal por perna (recompra de vendida = paga; venda de comprada = recebe) entra
+   * no cálculo do P&L (ver `plRealizado` em `lib/book`).
+   */
+  exitPrice: brl("exit_price"),
+  /** Resultado financeiro REALIZADO ao fechar, em BRL (lucro > 0, prejuízo < 0). */
+  realizedPnl: brl("realized_pnl"),
+  /**
+   * Rolagem: aponta da position ANTIGA para a NOVA que a substituiu
+   * (rastreabilidade). Auto-FK SEM cascade — `set null` para que remover uma não
+   * apague a outra (nem deixe FK pendurada).
+   */
+  rolledIntoPositionId: integer("rolled_into_position_id").references(
+    (): AnyPgColumn => position.id,
+    { onDelete: "set null" },
+  ),
+
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

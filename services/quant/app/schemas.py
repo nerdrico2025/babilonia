@@ -7,7 +7,7 @@ tickers exatos das opções, strikes, prêmios, vencimento, risco/ganho/breakeve
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -80,3 +80,55 @@ class ScreeningResponse(BaseModel):
     gerado_em: datetime
     frescor: list[FrescorOut]
     ranking: list[EstruturaOut]
+
+
+# ── Backtest (§15 Fase 3) — simulação histórica de uma estrutura ─────────────
+
+
+class PernaBacktestIn(BaseModel):
+    """Uma perna da estrutura. tipo/strike NÃO vêm do cliente: a base os resolve
+    pelo ticker (nada inventado, §2.4)."""
+
+    option_symbol: str
+    lado: Literal["compra", "venda"]
+    quantidade: int = Field(ge=1)
+
+
+class BacktestRequest(BaseModel):
+    """Corpo do POST /backtest: a estrutura (pernas) + as datas."""
+
+    pernas: list[PernaBacktestIn] = Field(min_length=1)
+    data_entrada: date
+    # Saída opcional: ausente = levar ao vencimento (default).
+    data_saida: date | None = None
+    tamanho_lote: int = Field(default=100, ge=1)
+
+
+class PontoSerieOut(BaseModel):
+    data: datetime
+    valor_posicao: float
+    pl_acumulado: float
+    sem_negociacao: bool  # True = ao menos uma perna sem negócio (carry-forward)
+    fonte: Literal["mercado", "vencimento"]
+
+
+class ResumoBacktestOut(BaseModel):
+    # Risco SEMPRE antes do ganho (§2).
+    risco_maximo: float
+    rotulo_risco: Literal["DEFINIDO", "INDEFINIDO"]
+    ganho_maximo: float | Literal["ilimitado"]
+    pl_final: float
+    pl_final_pct_risco: float | None
+    dias_ate_vencimento: int
+    liquidado_no_vencimento: bool
+    avisos: list[str]
+
+
+class BacktestResponse(BaseModel):
+    aviso: str  # SIMULAÇÃO HISTÓRICA — passado não garante futuro (§2)
+    ativo: str
+    data_entrada: datetime
+    data_saida: datetime
+    vencimento: datetime
+    serie: list[PontoSerieOut]
+    resumo: ResumoBacktestOut

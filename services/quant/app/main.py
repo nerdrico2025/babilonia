@@ -13,7 +13,7 @@ Rodar local:  uvicorn app.main:app --reload
 from fastapi import FastAPI
 
 from app.core.config import get_settings
-from app.routers import health, screening
+from app.routers import backtest, health, screening
 
 settings = get_settings()
 
@@ -25,6 +25,7 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(screening.router)
+app.include_router(backtest.router)
 
 
 @app.get("/", tags=["root"])

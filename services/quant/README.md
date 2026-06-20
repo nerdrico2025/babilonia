@@ -86,6 +86,8 @@ uv run uvicorn app.main:app --reload
 Servidor em `http://localhost:8000`:
 
 - `GET /health` → `{"status":"ok","service":"babilonia-quant","environment":"local"}`
+- `POST /screening` → triagem da cadeia (ver abaixo)
+- `POST /backtest` → simulação histórica de uma estrutura (ver abaixo)
 - `GET /docs` → Swagger UI (FastAPI)
 
 O Next.js usa o `/health` para confirmar que o serviço está de pé **antes** de
@@ -149,6 +151,54 @@ ficar lenta, baixe `max_strikes_por_lado` / `max_vencimentos` ou restrinja
 `vencimento_max_dias` — o custo dominante é a geração de condores (par interno ×
 largura de asa), já limitada à janela.
 
+## Backtest de estrutura — `POST /backtest`
+
+Dada uma **estrutura escolhida** (pernas com tickers exatos) e uma **data de
+entrada** histórica, simula o **mark-to-market diário** da posição até o vencimento
+(ou até uma data de saída informada), usando os fechamentos reais de
+`opcao_cotahist`. O usuário escolhe a estrutura e a data; o serviço mostra **como
+ela teria evoluído**. (A Route Handler do Next.js que consome este endpoint **ainda
+não existe** — próximo prompt.)
+
+> ⚠️ **Não** é uma engine de "estratégia automática" decidindo entradas ao longo do
+> tempo. É **SIMULAÇÃO HISTÓRICA** — passado não garante futuro; a decisão é do
+> usuário (§2). O payload carrega esse aviso explícito.
+
+**Corpo da requisição:**
+
+| Campo | Default | Significado |
+|---|---|---|
+| `pernas[]` | — (≥1) | `{ option_symbol, lado: compra\|venda, quantidade }`. `tipo`/`strike` **não** vêm do cliente — a base os resolve pelo ticker (nada inventado, §2.4). |
+| `data_entrada` | — | Pregão de entrada (`YYYY-MM-DD`). |
+| `data_saida` | vencimento | Saída opcional; ausente = levar ao vencimento. |
+| `tamanho_lote` | 100 | Tamanho do lote da B3. |
+
+```bash
+curl -X POST localhost:8000/backtest -H 'content-type: application/json' \
+  -d '{"pernas":[{"option_symbol":"PETRA21","lado":"compra","quantidade":1},
+                 {"option_symbol":"PETRA22","lado":"venda","quantidade":1}],
+       "data_entrada":"2026-01-05"}'
+```
+
+**O que o backtest garante** (decisões de design):
+
+- **Nenhum dado inventado (§2.4).** O **prêmio de entrada** é o fechamento real de
+  cada perna no pregão de entrada; cada dia usa o fechamento real daquele pregão. Em
+  dia **sem negociação** (fechamento 0,00 no COTAHIST), mantém-se o **último preço
+  conhecido** com a flag `sem_negociacao=true` — nunca se inventa um preço. Faltando
+  o preço de entrada de uma perna, o serviço **recusa** (HTTP 422) e aponta o que
+  falta.
+- **Sem look-ahead.** Cada dia simulado usa **apenas** pregões ≤ aquele dia (cursor
+  estritamente cronológico). Há teste explícito de proteção.
+- **Payoff reusado no vencimento.** No vencimento, o resultado final é o **payoff
+  intrínseco** da estrutura ao spot do objeto, calculado por `options_math` (não se
+  duplica fórmula). Em saída antecipada, o final é a última marcação a mercado.
+- **Risco antes do ganho (§2).** O `resumo` traz `risco_maximo`/`rotulo_risco`
+  (teóricos no momento da entrada) antes de `ganho_maximo` e do `pl_final`.
+- **Resposta:** `serie[]` de `{ data, valor_posicao, pl_acumulado, sem_negociacao,
+  fonte }` + `resumo` (P&L final, risco máximo, dias até o vencimento, avisos de
+  dados faltantes) + `aviso` de simulação histórica.
+
 ## Rodar os testes
 
 ```bash
@@ -169,6 +219,11 @@ placeholder; o router é testado com a camada de banco mockada). Cobertura:
 - `test_db_readonly.py` — confirma que a conexão abre **read-only** e que a camada
   de dados **não tem SQL de escrita** (nenhuma escrita é tentada).
 - `test_screening_router.py` — o endpoint `POST /screening` (com o banco mockado).
+- `test_backtest.py` — núcleo do backtest: P&L final = **payoff no vencimento**,
+  **proteção contra look-ahead**, **recusa por dados insuficientes** (§2.4),
+  carry-forward de dia sem negócio e um **teste de performance** (janela de meses).
+- `test_backtest_router.py` — o endpoint `POST /backtest` (banco mockado), incl. a
+  tradução de "dados insuficientes" → **422** e estrutura inválida → **400**.
 
 ## Deploy (Railway)
 
@@ -191,10 +246,11 @@ docker run --rm -p 8000:8000 --env-file services/quant/.env babilonia-quant
 services/quant/
   app/
     main.py            entrypoint FastAPI (monta routers)
-    schemas.py         contrato HTTP (Pydantic) do /screening
+    schemas.py         contrato HTTP (Pydantic) do /screening e /backtest
     routers/
       health.py        GET /health (liveness, não toca no banco)
       screening.py     POST /screening (orquestra: banco → núcleo puro → payload)
+      backtest.py      POST /backtest (orquestra: banco → núcleo puro → payload)
     core/
       config.py        config tipada (pydantic-settings, lê DATABASE_URL)
       db.py            conexão Postgres SOMENTE LEITURA
@@ -202,6 +258,7 @@ services/quant/
       options_math.py  CÓPIA PARALELA do lib/options-math (TS) — §18, puro
       liquidez.py      CÓPIA PARALELA do lib/liquidez.ts — filtro de liquidez
       screening.py     núcleo do screening (varredura + ranking), PURO
+      backtest.py      núcleo do backtest (mark-to-market diário), PURO
       dados.py         acesso de LEITURA (watchlist/opcao_cotahist/acao_cotahist)
   tests/
     test_options_math.py    casos numéricos do §18 (espelham os testes do TS)
@@ -209,6 +266,8 @@ services/quant/
     test_screening.py       geração, liquidez, ranking, capital
     test_db_readonly.py     conexão read-only / sem SQL de escrita
     test_screening_router.py  endpoint POST /screening (banco mockado)
+    test_backtest.py        núcleo do backtest (payoff/look-ahead/dados/perf)
+    test_backtest_router.py   endpoint POST /backtest (banco mockado)
     test_health.py          sobe o app e bate no /health
   Dockerfile           imagem de produção (uv + Python 3.12)
   pyproject.toml       deps + config do pytest

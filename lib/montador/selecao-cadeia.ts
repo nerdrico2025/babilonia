@@ -12,6 +12,8 @@
 
 import type { TipoOpcao } from "@/lib/options-math";
 
+import type { EstruturaId } from "./catalogo";
+
 /** Uma série de opção escolhida na cadeia, pronta para virar perna. */
 export interface SerieSelecionada {
   /** Ticker exato da opção (ex.: "PETRK221"). */
@@ -32,6 +34,13 @@ export interface SelecaoCadeia {
   /** Ativo-objeto (ex.: "PETR4"). */
   ativo: string;
   series: SerieSelecionada[];
+  /**
+   * Estrutura JÁ identificada (preenchida pela TRIAGEM do screening, §15): quando
+   * presente, o montador a seleciona sozinho e pré-preenche tudo — o usuário não
+   * redigita nada. Vindo da cadeia (seleção manual de séries), fica `undefined` e
+   * o usuário escolhe a estrutura normalmente.
+   */
+  estruturaSugerida?: EstruturaId;
 }
 
 const CHAVE = "babilonia:selecao-cadeia";

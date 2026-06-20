@@ -311,6 +311,15 @@ export const GLOSSARIO: readonly Termo[] = [
     categoria: "Estruturas",
   },
   {
+    slug: "razao-ganho-risco",
+    termo: "Razão ganho/risco",
+    curto:
+      "Quantas vezes o ganho máximo supera o risco máximo (ex.: 1,5 = ganha-se até 1,5× o que se arrisca).",
+    longo:
+      "A razão ganho/risco divide o ganho máximo possível pelo risco máximo (a perda máxima) de uma estrutura de risco definido. Um valor de 1,5 quer dizer que, no melhor caso, ganha-se até 1,5 vez o que se arrisca no pior caso. É só uma medida de proporção — NÃO leva em conta a probabilidade de cada cenário, então não diz, sozinha, se a operação é “boa”. Serve para comparar estruturas e priorizar a análise.",
+    categoria: "Estruturas",
+  },
+  {
     slug: "trava-de-alta",
     termo: "Trava de alta",
     curto:

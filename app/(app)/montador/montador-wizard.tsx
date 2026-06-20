@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -166,6 +166,19 @@ export function MontadorWizard() {
     setSelecao(null);
     setAvisoPrefill(null);
   }
+
+  // Triagem do screening (§15): se a seleção já traz a estrutura identificada,
+  // seleciona-a e pré-preenche tudo sozinho — o usuário cai no passo 2 pronto,
+  // sem redigitar strikes/prêmios/vencimento. Roda uma única vez na montagem.
+  const sugestaoAplicada = useRef(false);
+  useEffect(() => {
+    if (sugestaoAplicada.current) return;
+    if (selecao?.estruturaSugerida) {
+      sugestaoAplicada.current = true;
+      escolher(selecao.estruturaSugerida);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function gerarTicket() {
     if (!def || !resultado || !vencimento) return;

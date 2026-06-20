@@ -14,6 +14,10 @@ const serverEnvSchema = z.object({
   AUTH_SECRET: z.string().min(1),
   AUTH_USERNAME: z.string().min(1),
   AUTH_PASSWORD: z.string().min(1),
+  // URL do microserviço de quant (screening). OPCIONAL: ausente → a integração
+  // cai no default de dev (http://localhost:8000) e, se o serviço estiver fora, a
+  // tela de triagem degrada graciosamente (§6.3). Server-only.
+  QUANT_SERVICE_URL: z.string().url().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

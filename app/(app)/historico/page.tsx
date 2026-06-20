@@ -73,6 +73,8 @@ export default async function HistoricoPage() {
               breakevens: p.breakevens,
               pernas: p.pernas,
               ticketContent: p.ticketContent,
+              realizedPnl: p.realizedPnl,
+              rolledIntoPositionId: p.rolledIntoPositionId,
             }),
           )}
           capitalTotal={historico.capitalTotal}

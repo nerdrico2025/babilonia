@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { valoresPosition, type TicketPayload } from "../ticket/operacao";
-import {
-  encerrarPosition,
-  planejarEncerramento,
-  rolarPosition,
-  type CtxTx,
-  type ExecutarTx,
-  type StatusPosition,
-} from "./actions";
+import { encerrarPosition, rolarPosition, type CtxTx, type ExecutarTx } from "./actions";
+import { planejarEncerramento, type StatusPosition } from "./dominio";
 
 /**
  * Testa os Server Actions de ciclo de vida (H2) SEM banco: injeta um `ExecutarTx`

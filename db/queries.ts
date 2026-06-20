@@ -18,6 +18,8 @@ import { leg, position, settings, ticket, watchlist } from "./schema";
 
 /** Perna de opção de uma posição (números já convertidos). */
 export interface PernaBook {
+  /** Id da `leg` no banco — referência para o fechamento por perna (encerrar). */
+  legId: number;
   optionSymbol: string;
   kind: "call" | "put";
   side: "compra" | "venda";
@@ -75,6 +77,7 @@ export async function carregarBook(): Promise<ResultadoBook> {
     for (const l of pernas) {
       const lista = pernasPorPosicao.get(l.positionId) ?? [];
       lista.push({
+        legId: l.id,
         optionSymbol: l.optionSymbol,
         kind: l.kind,
         side: l.side,
@@ -173,6 +176,10 @@ export interface PosicaoHistorico {
   pernas: PernaBook[];
   /** Texto do ticket mais recente (§11), ou null se não houver. */
   ticketContent: string | null;
+  /** P&L realizado ao encerrar (BRL), ou null enquanto aberta/rolada. */
+  realizedPnl: number | null;
+  /** Position nova que substituiu esta (rolagem), ou null. */
+  rolledIntoPositionId: number | null;
 }
 
 /** Resultado da leitura do histórico (com capital, p/ reconstruir tickets). */
@@ -212,6 +219,7 @@ export async function carregarHistorico(): Promise<ResultadoHistorico> {
     for (const l of pernas) {
       const lista = pernasPorPosicao.get(l.positionId) ?? [];
       lista.push({
+        legId: l.id,
         optionSymbol: l.optionSymbol,
         kind: l.kind,
         side: l.side,
@@ -247,6 +255,8 @@ export async function carregarHistorico(): Promise<ResultadoHistorico> {
         breakevens: p.breakevens,
         pernas: pernasPorPosicao.get(p.id) ?? [],
         ticketContent: ticketPorPosicao.get(p.id) ?? null,
+        realizedPnl: p.realizedPnl == null ? null : Number(p.realizedPnl),
+        rolledIntoPositionId: p.rolledIntoPositionId ?? null,
       })),
     };
   } catch (e) {

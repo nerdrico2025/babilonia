@@ -9,6 +9,7 @@ import {
   CircleAlert,
   ClipboardCopy,
   Loader2,
+  Repeat,
   Save,
 } from "lucide-react";
 
@@ -36,6 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { persistirTicket, type TicketPayload } from "./actions";
+import { rolarPosition } from "../historico/actions";
 
 // Aceita vírgula decimal (pt-BR); devolve número ou null.
 function paraNumero(texto: string): number | null {
@@ -86,9 +88,13 @@ export function TicketCliente() {
   const [stop, setStop] = useState("");
   const [alvo, setAlvo] = useState("");
 
+  // Rolagem: quando o rascunho veio do histórico marcado, esta operação SUBSTITUI
+  // a position de origem (chama rolarPosition em vez de persistirTicket).
+  const rolagemDe = rascunho?.rolagemDePositionId ?? null;
+
   const [copiado, setCopiado] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [salvo, setSalvo] = useState<{ positionId: number } | null>(null);
+  const [salvo, setSalvo] = useState<{ positionId: number; rolouDe: number | null } | null>(null);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
 
   function atualizarPerna(i: number, campo: Partial<PernaForm>) {
@@ -224,10 +230,24 @@ export function TicketCliente() {
       },
     };
 
+    // Rolagem → rolarPosition (cria a nova + marca a antiga "rolada", atômico);
+    // operação nova → persistirTicket. Mesmo payload nos dois caminhos.
+    if (rolagemDe != null) {
+      const r = await rolarPosition(rolagemDe, payload);
+      setSalvando(false);
+      if (r.ok) {
+        setSalvo({ positionId: r.novaPositionId, rolouDe: rolagemDe });
+        limparRascunho();
+      } else {
+        setErroSalvar(r.erro.mensagem);
+      }
+      return;
+    }
+
     const r = await persistirTicket(payload);
     setSalvando(false);
     if (r.ok) {
-      setSalvo({ positionId: r.positionId });
+      setSalvo({ positionId: r.positionId, rolouDe: null });
       limparRascunho(); // consumido: evita salvar duas vezes a mesma operação
     } else {
       setErroSalvar(r.erro);
@@ -241,12 +261,20 @@ export function TicketCliente() {
         <CardContent className="flex flex-col items-start gap-3 pt-1">
           <div className="inline-flex items-center gap-2 rounded-full bg-risco-ok-suave px-3 py-1 text-sm font-medium text-risco-ok">
             <Check className="size-4" aria-hidden />
-            Operação registrada no book
+            {salvo.rolouDe != null ? "Rolagem registrada no book" : "Operação registrada no book"}
           </div>
           <p className="text-sm text-muted-foreground">
-            O ticket foi salvo e a posição entrou no seu book. Lembre-se: a ordem
-            ainda precisa ser <strong className="text-foreground">digitada por você</strong> no
-            home broker — o Babilônia não envia ordens.
+            {salvo.rolouDe != null ? (
+              <>
+                A posição #{salvo.rolouDe} foi marcada como{" "}
+                <strong className="text-foreground">rolada</strong> e a nova entrou no seu book.
+              </>
+            ) : (
+              "O ticket foi salvo e a posição entrou no seu book."
+            )}{" "}
+            Lembre-se: a ordem ainda precisa ser{" "}
+            <strong className="text-foreground">digitada por você</strong> no home broker — o
+            Babilônia não envia ordens.
           </p>
           <div className="flex gap-2">
             <Button render={<Link href="/" />}>Ver o book</Button>
@@ -262,6 +290,18 @@ export function TicketCliente() {
   return (
     <div className="flex flex-col gap-6">
       <DisclaimerNota />
+
+      {/* Aviso de ROLAGEM: deixa claro que esta operação substitui a antiga. */}
+      {rolagemDe != null && (
+        <div className="flex items-start gap-2 rounded-lg border border-risco-alerta/40 bg-risco-alerta-suave px-3.5 py-3 text-sm text-risco-alerta">
+          <Repeat className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            Esta é uma <strong>rolagem da posição #{rolagemDe}</strong>. Ao confirmar, a posição
+            #{rolagemDe} será marcada como <strong>rolada</strong> e esta nova operação entra no book
+            no lugar dela — não é uma operação nova do zero.
+          </span>
+        </div>
+      )}
 
       {/* Cabeçalho com a estrutura e o rótulo de risco em destaque (§2). */}
       <div className="flex flex-wrap items-center justify-between gap-3">

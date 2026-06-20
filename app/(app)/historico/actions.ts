@@ -21,7 +21,6 @@ import { z } from "zod";
 import { comTransacao, type TxNeon } from "@/db";
 import { leg, position, ticket } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { plRealizado, type PernaRealizada } from "@/lib/book";
 
 import {
   payloadSchema,
@@ -30,35 +29,25 @@ import {
   valoresTicket,
   type TicketPayload,
 } from "../ticket/operacao";
+import {
+  encerrarSchema,
+  erro,
+  planejarEncerramento,
+  type EncerrarInput,
+  type ErroHistorico,
+  type PositionComLegs,
+} from "./dominio";
 
-// ── Erros tipados ─────────────────────────────────────────────────────────────
-
-export type CodigoErroHistorico =
-  | "validacao"
-  | "nao_encontrada"
-  | "nao_aberta"
-  | "fechamento_incompleto"
-  | "persistencia";
-
-export interface ErroHistorico {
-  codigo: CodigoErroHistorico;
-  mensagem: string;
-}
-
-function erro(codigo: CodigoErroHistorico, mensagem: string): { ok: false; erro: ErroHistorico } {
-  return { ok: false, erro: { codigo, mensagem } };
-}
+// Reexporta os tipos do domínio para quem importava daqui (apagados em runtime).
+export type {
+  CodigoErroHistorico,
+  ErroHistorico,
+  StatusPosition,
+  PositionComLegs,
+  EncerrarInput,
+} from "./dominio";
 
 // ── Contrato da camada de dados (injetável p/ teste) ──────────────────────────
-
-/** Status persistido de uma position (espelha o enum `positionStatus`). */
-export type StatusPosition = "aberta" | "encerrada" | "rolada";
-
-/** Position + suas legs, no mínimo que os actions precisam. */
-export interface PositionComLegs {
-  position: { id: number; status: StatusPosition };
-  legs: { id: number; side: "compra" | "venda"; quantity: number; premium: number }[];
-}
 
 /** Operações da transação (a impl. de produção usa Drizzle/tx; o teste, memória). */
 export interface CtxTx {
@@ -143,48 +132,9 @@ const executarTxPadrao: ExecutarTx = (fn) => comTransacao((tx) => fn(ctxDrizzle(
 
 // ── Encerrar ──────────────────────────────────────────────────────────────────
 
-const encerrarSchema = z.object({
-  /** Débito/crédito líquido de fechamento (por ação) — base da apuração. */
-  exitPrice: z.number().finite(),
-  /** Prêmio de fechamento por perna (por ação), referenciado pelo id da leg. */
-  pernasFechamento: z
-    .array(z.object({ legId: z.number().int().positive(), premioFechamento: z.number().finite() }))
-    .min(1),
-});
-
-export type EncerrarInput = z.infer<typeof encerrarSchema>;
-
 export type ResultadoEncerrar =
   | { ok: true; realizedPnl: number }
   | { ok: false; erro: ErroHistorico };
-
-/**
- * Plano de encerramento PURO: casa cada leg ao seu prêmio de fechamento e apura o
- * P&L com `plRealizado` (H1). Falha tipada se faltar o fechamento de alguma perna.
- */
-export function planejarEncerramento(
-  legs: PositionComLegs["legs"],
-  dados: EncerrarInput,
-): { ok: true; realizedPnl: number } | { ok: false; erro: ErroHistorico } {
-  const porLeg = new Map(dados.pernasFechamento.map((p) => [p.legId, p.premioFechamento]));
-  const pernas: PernaRealizada[] = [];
-  for (const l of legs) {
-    const premioFechamento = porLeg.get(l.id);
-    if (premioFechamento == null) {
-      return erro(
-        "fechamento_incompleto",
-        `Faltou o prêmio de fechamento da perna ${l.id}. Informe o fechamento de todas as pernas.`,
-      );
-    }
-    pernas.push({
-      side: l.side,
-      quantity: l.quantity,
-      premioAbertura: l.premium,
-      premioFechamento,
-    });
-  }
-  return { ok: true, realizedPnl: plRealizado(pernas) };
-}
 
 /**
  * Encerra uma position aberta: apura o P&L realizado e grava status/closedAt/

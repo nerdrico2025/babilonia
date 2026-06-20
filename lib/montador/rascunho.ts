@@ -48,6 +48,12 @@ export interface RascunhoOperacao {
    * dashboard, ao "revisar" uma posição já registrada, pode pré-preenchê-los.
    */
   simbolos?: (string | null)[];
+  /**
+   * Quando presente, esta operação é uma ROLAGEM da position de id indicado: ao
+   * confirmar no ticket, chama-se `rolarPosition` (cria a nova + marca a antiga
+   * "rolada") em vez de `persistirTicket`. O ticket exibe o aviso de rolagem.
+   */
+  rolagemDePositionId?: number;
 }
 
 /** Salva o rascunho para a tela de ticket consumir. */

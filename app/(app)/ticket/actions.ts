@@ -14,56 +14,21 @@
  * tela — o usuário ainda consegue copiar o ticket.
  */
 
-import { z } from "zod";
-
 import { getDb } from "@/db";
 import { leg, position, ticket } from "@/db/schema";
 
-// Famílias do enum `structureType` (§7) — espelha `FamiliaEstrutura` do catálogo.
-const FAMILIAS = [
-  "trava_alta",
-  "trava_baixa",
-  "borboleta",
-  "condor",
-  "straddle",
-  "strangle",
-  "venda_coberta",
-] as const;
+import {
+  payloadSchema,
+  valoresLegs,
+  valoresPosition,
+  valoresTicket,
+  type TicketPayload,
+} from "./operacao";
 
-const pernaSchema = z.object({
-  /** Ticker EXATO da opção na B3 (ex.: "PETRK221"). */
-  optionSymbol: z.string().trim().min(1),
-  kind: z.enum(["call", "put"]),
-  side: z.enum(["compra", "venda"]),
-  strike: z.number().finite(),
-  quantity: z.number().int().positive(),
-  premium: z.number().finite(),
-});
-
-const payloadSchema = z.object({
-  underlying: z.string().trim().min(1),
-  structure: z.enum(FAMILIAS),
-  /** Vencimento em ISO (menor vencimento das pernas). */
-  expiresAtISO: z.string().min(1),
-  /**
-   * Risco máximo em BRL, sempre FINITO: no risco definido é o risco da estrutura;
-   * no indefinido é a margem requerida (proxy de capital comprometido), pois não
-   * há valor finito de perda máxima — `riskDefined` registra a natureza real.
-   */
-  maxRisk: z.number().finite().nonnegative(),
-  /** Ganho máximo em BRL, ou `null` quando ilimitado. */
-  maxGain: z.number().finite().nullable(),
-  riskDefined: z.boolean(),
-  breakevens: z.array(z.number().finite()),
-  pernas: z.array(pernaSchema).min(1),
-  /** Texto do ticket no formato do §11, pronto para copiar. */
-  content: z.string().min(1),
-  /** Snapshot estruturado (para auditoria/histórico). */
-  data: z.record(z.string(), z.unknown()),
-});
-
-/** Payload aceito pela action (inferido do schema Zod). */
-export type TicketPayload = z.infer<typeof payloadSchema>;
+// Schema/mappers da criação vivem em `./operacao` (módulo puro): um arquivo
+// `"use server"` só pode exportar funções async. Reexportamos o TIPO (apagado em
+// runtime) para os consumidores que já importavam daqui.
+export type { TicketPayload };
 
 /** Resultado da persistência. */
 export type ResultadoPersistencia =
@@ -83,7 +48,6 @@ export async function persistirTicket(
     return { ok: false, erro: "Dados do ticket inválidos para salvar." };
   }
   const p = parsed.data;
-  const vencimento = new Date(p.expiresAtISO);
 
   try {
     const db = getDb();
@@ -91,41 +55,17 @@ export async function persistirTicket(
     // 1) position — o resumo que alimenta o book (risco antes do ganho, §2).
     const [pos] = await db
       .insert(position)
-      .values({
-        underlying: p.underlying,
-        structure: p.structure,
-        expiresAt: vencimento,
-        status: "aberta",
-        maxRisk: String(p.maxRisk),
-        maxGain: p.maxGain == null ? null : String(p.maxGain),
-        riskDefined: p.riskDefined,
-        breakevens: p.breakevens,
-      })
+      .values(valoresPosition(p))
       .returning({ id: position.id });
 
     const positionId = pos!.id;
 
     // 2) leg — uma linha por perna de opção. Gregas/IV ficam nulas aqui: são
     //    calculadas on-demand (§7) e não pertencem ao ato de registrar a operação.
-    await db.insert(leg).values(
-      p.pernas.map((perna) => ({
-        positionId,
-        optionSymbol: perna.optionSymbol,
-        kind: perna.kind,
-        side: perna.side,
-        strike: String(perna.strike),
-        expiresAt: vencimento,
-        quantity: perna.quantity,
-        premium: String(perna.premium),
-      })),
-    );
+    await db.insert(leg).values(valoresLegs(positionId, p));
 
     // 3) ticket — texto pronto (§11) + snapshot estruturado.
-    await db.insert(ticket).values({
-      positionId,
-      content: p.content,
-      data: p.data,
-    });
+    await db.insert(ticket).values(valoresTicket(positionId, p));
 
     return { ok: true, positionId };
   } catch (e) {

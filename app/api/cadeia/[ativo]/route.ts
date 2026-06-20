@@ -16,6 +16,10 @@
  *  - open interest NÃO existe no COTAHIST → liquidez por volume + spread.
  */
 import { getCadeiaCotahist } from "@/lib/dados-opcoes/cadeia";
+import {
+  calcularSkewAutomatico,
+  type ResultadoSkewAutomatico,
+} from "@/lib/dados-opcoes/skew";
 import { getVolatilidadeCotahist } from "@/lib/dados-opcoes/volatilidade";
 
 import {
@@ -72,10 +76,26 @@ export async function GET(
       frescorVolatilidade = null;
     }
 
+    // Skew automático (V1/V2) do vencimento MAIS PRÓXIMO — best-effort, como a
+    // volatilidade. Reaproveita a cadeia JÁ buscada (injeta `buscarCadeia`), então
+    // NÃO há segundo round-trip de cadeia (só a resolução de IV dos 2 strikes).
+    let skew: ResultadoSkewAutomatico | null = null;
+    const vencimentoMaisProximo = cadeia.vencimentos?.[0]?.vencimento;
+    if (vencimentoMaisProximo) {
+      try {
+        skew = await calcularSkewAutomatico(ativo, vencimentoMaisProximo, {
+          deps: { buscarCadeia: async () => ({ cadeia, asOf }) },
+        });
+      } catch {
+        skew = null;
+      }
+    }
+
     return Response.json({
       ativo,
       cadeia,
       volatilidade,
+      skew,
       frescor: {
         cadeia: frescorEod(asOf),
         volatilidade: frescorVolatilidade,

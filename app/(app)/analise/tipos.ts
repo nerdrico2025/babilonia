@@ -6,6 +6,7 @@
  */
 
 import type { AnaliseTecnica } from "@/lib/analise-tecnica/tipos";
+import type { ResultadoSkewAutomatico } from "@/lib/dados-opcoes/skew";
 import type { Fundamentos } from "@/lib/fundamentos/tipos";
 import type { CadeiaOpcoes, VolatilidadeAtivo } from "@/lib/opcoes/tipos";
 
@@ -47,11 +48,17 @@ export interface RespostaAtivo {
   frescor: { preco: Frescor; fundamentos: Frescor | null };
 }
 
-/** GET /api/cadeia/{ativo} (aqui só usamos IV/volatilidade). */
+/**
+ * GET /api/cadeia/{ativo}. Aqui usamos IV/volatilidade e o `skew` automático
+ * (V1/V2): par OTM do vencimento mais próximo, calculado sobre a MESMA cadeia. É
+ * best-effort — `null` se a rota não conseguir computar; `{ disponivel: false }`
+ * quando não há par comparável (a UI cai no fallback manual).
+ */
 export interface RespostaCadeia {
   ativo: string;
   cadeia: CadeiaOpcoes;
   volatilidade: VolatilidadeAtivo | null;
+  skew: ResultadoSkewAutomatico | null;
   frescor: { cadeia: Frescor; volatilidade: Frescor | null };
 }
 

@@ -140,6 +140,7 @@ export function AnaliseCliente() {
           <BlocoVolatilidade
             ivAtual={dadosCadeia?.cadeia.ivAtual ?? null}
             volatilidade={dadosCadeia?.volatilidade ?? null}
+            skew={dadosCadeia?.skew ?? null}
             frescor={dadosCadeia?.frescor.volatilidade ?? null}
           />
         </>

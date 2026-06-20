@@ -145,6 +145,9 @@ Handler que chama o serviço ainda **não** existe — próximo prompt).
 
 - **TypeScript estrito** (`strict` + flags extras no `tsconfig.json`). Sem `any`.
 - **Comentários e textos de UI em português** (público leigo, §2).
+- **Comunicação com o usuário em português do Brasil.** Toda interação no chat
+  (respostas, resumos de status, explicações, perguntas) é em pt-BR, não só os
+  comentários/textos de código. Preferência do dono do projeto.
 - **`options-math` puro e testado** — toda função do núcleo tem teste no Vitest.
 - Imports via alias `@/` (ex.: `@/lib/options-math`).
 - Validar dados externos e formulários com **Zod**.

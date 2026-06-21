@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Check,
   CircleAlert,
+  History,
   Link2,
   Pencil,
   Table2,
@@ -42,10 +43,12 @@ import {
   limparSelecaoCadeia,
   type SelecaoCadeia,
 } from "@/lib/montador/selecao-cadeia";
-import type { ResultadoEstrutura } from "@/lib/options-math";
+import type { PernaBacktestParam } from "@/lib/integrations/quant-service";
+import type { Leg, ResultadoEstrutura } from "@/lib/options-math";
 import { avaliarRisco, type AvaliacaoRisco, type Semaforo as SemaforoCor } from "@/lib/risk-rules";
 import { cn } from "@/lib/utils";
 
+import { BacktestHistorico } from "./backtest-historico";
 import { GraficoPayoff } from "./grafico-payoff";
 
 // Converte o semáforo das risk-rules (cor) no nível visual do componente <Semaforo>.
@@ -59,6 +62,33 @@ const NIVEL_POR_COR: Record<SemaforoCor, NivelRisco> = {
 function paraNumero(texto: string | undefined): number {
   if (texto == null || texto.trim() === "") return NaN;
   return Number(texto.trim().replace(/\./g, "").replace(",", "."));
+}
+
+/**
+ * Resolve as pernas montadas para TICKERS EXATOS (`option_symbol`), casando cada
+ * `Leg` (tipo + strike) com a série correspondente trazida da cadeia. É o que o
+ * `/backtest` exige (§2.4 — o ticker não é inventado, vem da cadeia). Devolve `null`
+ * se não há seleção ou se alguma perna não casa com uma série (ex.: strike editado à
+ * mão): sem o ticker exato, não dá para simular historicamente.
+ */
+function resolverPernasBacktest(
+  selecao: SelecaoCadeia | null,
+  legs: Leg[],
+): PernaBacktestParam[] | null {
+  if (!selecao || selecao.series.length === 0 || legs.length === 0) return null;
+  const pernas: PernaBacktestParam[] = [];
+  for (const leg of legs) {
+    const serie = selecao.series.find(
+      (s) => s.tipo === leg.tipo && Math.abs(s.strike - leg.strike) < 1e-6,
+    );
+    if (!serie) return null; // perna sem ticker exato → não dá para simular
+    pernas.push({
+      optionSymbol: serie.symbol,
+      lado: leg.lado,
+      quantidade: leg.quantidade,
+    });
+  }
+  return pernas;
 }
 
 type Passo = 1 | 2 | 3;
@@ -141,6 +171,13 @@ export function MontadorWizard() {
 
   const contextoCompleto = ativoObjeto.trim() !== "" && vencimento !== "" && qtdValida;
   const podeAvancar = resultado != null && contextoCompleto;
+
+  // Pernas resolvidas p/ tickers exatos (só quando a estrutura veio da cadeia) —
+  // habilitam o "Testar historicamente" sem o usuário redigitar nada (§15).
+  const pernasBacktest = useMemo(
+    () => (resultado ? resolverPernasBacktest(selecao, resultado.legs) : null),
+    [resultado, selecao],
+  );
 
   function escolher(id: EstruturaId) {
     setEstruturaId(id);
@@ -237,6 +274,7 @@ export function MontadorWizard() {
           avaliacoes={avaliacoes}
           ativoObjeto={ativoObjeto}
           capitalNum={capitalNum}
+          pernasBacktest={pernasBacktest}
           onVoltar={() => setPasso(2)}
           onGerarTicket={gerarTicket}
         />
@@ -580,6 +618,7 @@ function PassoResumo({
   avaliacoes,
   ativoObjeto,
   capitalNum,
+  pernasBacktest,
   onVoltar,
   onGerarTicket,
 }: {
@@ -588,6 +627,7 @@ function PassoResumo({
   avaliacoes: AvaliacaoRisco[];
   ativoObjeto: string;
   capitalNum: number;
+  pernasBacktest: PernaBacktestParam[] | null;
   onVoltar: () => void;
   onGerarTicket: () => void;
 }) {
@@ -683,6 +723,21 @@ function PassoResumo({
           />
         </CardContent>
       </Card>
+
+      {/* Testar historicamente (§15): só quando a estrutura veio da cadeia (tickers
+          exatos resolvidos). Estrutura digitada à mão não tem como casar com séries. */}
+      {pernasBacktest && pernasBacktest.length > 0 ? (
+        <BacktestHistorico pernas={pernasBacktest} ativo={ativoObjeto.trim()} />
+      ) : (
+        <p className="flex items-start gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3.5 py-3 text-xs text-muted-foreground">
+          <History className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            A <TermoTecnico termo="simulacao-historica">simulação histórica</TermoTecnico>{" "}
+            fica disponível quando a estrutura é trazida da cadeia (assim o Babilônia
+            sabe os tickers exatos das opções, sem você redigitar nada).
+          </span>
+        </p>
+      )}
 
       {/* (5) Explicação em linguagem de iniciante. */}
       <Card>

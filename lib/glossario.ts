@@ -439,6 +439,33 @@ export const GLOSSARIO: readonly Termo[] = [
       "O ticket é o resumo padronizado da operação montada (ativo, pernas, quantidades, preços, risco máximo, breakevens, observações). O Babilônia gera o ticket para você conferir e digitar a ordem manualmente — ele nunca envia ordens.",
     categoria: "Operação",
   },
+  {
+    slug: "simulacao-historica",
+    termo: "Simulação histórica (backtest)",
+    curto:
+      "Mostra como a estrutura escolhida teria evoluído com os preços de fechamento já passados.",
+    longo:
+      "A simulação histórica (ou backtest) pega a estrutura que você montou e mostra como ela teria se comportado se tivesse sido montada numa data passada, usando os preços de fechamento reais de cada pregão até o vencimento. É uma ferramenta de análise, não uma recomendação: desempenho passado NÃO garante resultado futuro, e a decisão é sempre sua (§2).",
+    categoria: "Operação",
+  },
+  {
+    slug: "mark-to-market",
+    termo: "Marcação a mercado (mark-to-market)",
+    curto:
+      "Reavaliar a posição todo dia pelo preço de fechamento daquele pregão, para ver o lucro/prejuízo no caminho.",
+    longo:
+      "Marcar a mercado é reavaliar a sua posição a cada pregão pelo preço de fechamento daquele dia, em vez de esperar o vencimento. Na simulação histórica, é isso que desenha a linha do resultado dia a dia: quanto a operação valeria se fosse encerrada naquele fechamento. O número final, no vencimento, vem do payoff da estrutura.",
+    categoria: "Operação",
+  },
+  {
+    slug: "ajuste-provento",
+    termo: "Ajuste por provento",
+    curto:
+      "Quando a ação paga dividendo/JCP, a B3 reduz o strike das opções — não é movimento de mercado.",
+    longo:
+      "Quando a ação-objeto paga um provento em dinheiro (dividendo ou JCP), a B3 ajusta os contratos de opção já existentes, normalmente reduzindo o strike pelo valor do provento na data-ex, para preservar o valor econômico de quem tem a posição. Num gráfico histórico isso aparece como um “salto” no dia do ajuste — mas é um evento corporativo, não uma oscilação normal de preço.",
+    categoria: "Operação",
+  },
 ] as const;
 
 /** Mapa slug → termo, para busca O(1) no `<TermoTecnico>`. */

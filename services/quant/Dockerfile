@@ -15,7 +15,7 @@ WORKDIR /app
 # 1) Camada de dependências (cacheada enquanto pyproject/uv.lock não mudarem).
 #    --no-dev: sem pytest/httpx em produção. --no-install-project: rodamos do código-fonte.
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
     uv sync --frozen --no-dev --no-install-project
 
 # 2) Código da aplicação.

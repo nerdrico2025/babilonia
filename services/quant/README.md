@@ -228,17 +228,141 @@ placeholder; o router é testado com a camada de banco mockada). Cobertura:
 ## Deploy (Railway)
 
 O `Dockerfile` está otimizado para o Railway, mas é portável (qualquer runtime
-de container serve):
+de container serve). O `railway.json` (ao lado do Dockerfile) fixa o builder
+Dockerfile e usa `/health` como healthcheck de gating do deploy.
 
 - Railway injeta a porta em `$PORT`; o `CMD` a respeita (cai para `8000` local).
 - Definir `DATABASE_URL` (e, opcionalmente, `ENVIRONMENT=railway`) nas variáveis
-  do projeto no painel — **nunca** commitar valores reais.
+  do projeto — **nunca** commitar valores reais.
 
 ```bash
-# build/run local do container para validar
+# build/run local do container para validar (precisa do Docker daemon de pé)
 docker build -t babilonia-quant services/quant
 docker run --rm -p 8000:8000 --env-file services/quant/.env babilonia-quant
 ```
+
+### ⚠️ Pegadinha do Neon: use o endpoint DIRETO, NÃO o `-pooler`
+
+A `DATABASE_URL` deste serviço **tem de apontar para o endpoint DIRETO do Neon**
+(host **sem** o sufixo `-pooler`, ex.: `ep-xxx.sa-east-1.aws.neon.tech`), **não**
+para o endpoint com pooler (`ep-xxx-pooler...`).
+
+**Por quê:** `app/core/db.py` abre cada conexão com o startup option
+`-c default_transaction_read_only=on` (defesa em camadas — força transações
+somente-leitura no próprio Postgres). O **PgBouncer** que fica atrás do endpoint
+`-pooler` do Neon roda em *transaction pooling* e **rejeita opções de startup
+arbitrárias via `-c`**, então a conexão falha logo no boot. O endpoint direto
+fala com o Postgres real e aceita a opção. **Descoberto em desenvolvimento — não
+se perca de novo: se o serviço não conectar no boot, cheque primeiro se a URL tem
+`-pooler`.**
+
+> O `services/quant/.env` local já está com o endpoint **direto** — copie esse
+> mesmo valor para a variável do Railway.
+
+### Passo a passo — deploy via Railway CLI (recomendado)
+
+Conta usada: **Click Hero (`rafael@clickhero.com.br`)**. Rode tudo de dentro de
+`services/quant/` (o build context é essa pasta).
+
+```bash
+cd services/quant
+
+# 0) Confirme a conta e que não há projeto linkado ainda
+railway whoami
+railway status
+
+# 1) Crie o projeto e linke esta pasta (nome sugerido: babilonia-quant)
+railway init --name babilonia-quant
+
+# 2) Variáveis de ambiente.
+#    DATABASE_URL: leia o valor do .env local SEM ecoar na tela (--stdin):
+grep '^DATABASE_URL=' .env | sed 's/^DATABASE_URL=//' | railway variables set DATABASE_URL --stdin
+railway variables set ENVIRONMENT railway
+#    (Confirme que o host NÃO tem "-pooler" — ver pegadinha acima.)
+
+# 3) Deploy (sobe a pasta, Railway builda o Dockerfile e roda o healthcheck /health)
+railway up
+
+# 4) Gere o domínio público do serviço
+railway domain
+#    → anote a URL https://babilonia-quant-production-XXXX.up.railway.app
+```
+
+Se `railway init` reclamar de workspace, repita com
+`railway init --name babilonia-quant --workspace "Click Hero"`.
+
+### Alternativa — deploy pelo painel (GitHub)
+
+1. **New Project → Deploy from GitHub repo** → escolha o repositório do Babilônia.
+2. Em **Settings → Source**, defina **Root Directory = `services/quant`** (o
+   repo é mono-repo; o Railway precisa buildar só essa pasta). O `railway.json`
+   e o `Dockerfile` são detectados a partir daí.
+3. **Variables:** adicione `DATABASE_URL` (endpoint **direto** do Neon, sem
+   `-pooler`) e `ENVIRONMENT=railway`.
+4. **Settings → Networking → Generate Domain** para expor publicamente.
+
+### Validação pós-deploy (troque `$URL` pela URL pública)
+
+```bash
+URL=https://babilonia-quant-production-XXXX.up.railway.app
+
+# /health → 200
+curl -i $URL/health
+# espera: {"status":"ok","service":"babilonia-quant","environment":"railway"}
+
+# /screening (triagem PETR4) → ranking de estruturas de risco DEFINIDO
+curl -X POST $URL/screening -H 'content-type: application/json' \
+  -d '{"tickers":["PETR4"],"tipos":["trava_alta","borboleta"],"top_n":5,
+       "capital_total":100000,"risco_max_pct":0.05}'
+
+# /backtest (Caso C: trava de alta PETR4, entrada 15/04/2026) → série + resumo
+curl -X POST $URL/backtest -H 'content-type: application/json' \
+  -d '{"pernas":[{"option_symbol":"PETRE450","lado":"compra","quantidade":1},
+                 {"option_symbol":"PETRE455","lado":"venda","quantidade":1}],
+       "data_entrada":"2026-04-15"}'
+# espera (Caso C): débito de entrada ≈ 0,30; resumo.ajustes_provento com a
+# data-ex 23/04/2026 (valor_ajuste_por_acao 0,54) — bate com test_backtest_provento.py.
+```
+
+### Ligar ao Next.js (Vercel)
+
+No projeto **babilonia** do Vercel, configure a env var
+**`QUANT_SERVICE_URL`** = a URL pública do Railway (sem barra no fim), em
+**Production** (e Preview, se quiser testar em preview):
+
+```bash
+# pela CLI, na raiz do repo:
+vercel env add QUANT_SERVICE_URL production
+# cole a URL https://babilonia-quant-production-XXXX.up.railway.app
+vercel --prod   # redeploy para a env entrar em vigor
+```
+
+`lib/integrations/quant-service.ts` lê `QUANT_SERVICE_URL` (server-only; default
+`http://localhost:8000` em dev). Sem essa var, as telas de screening/backtest em
+produção caem no fallback "ferramenta de triagem indisponível".
+
+### Cold start (Railway free hiberna)
+
+O free tier hiberna o container quando ocioso; o **1º request acorda** o serviço
+(cold start de alguns segundos). O timeout do Next.js
+(`TIMEOUT_PADRAO_MS = 25_000` em `lib/integrations/quant-service.ts`) é generoso
+de propósito por causa disso. Meça o cold start real após o deploy:
+
+```bash
+# deixe ocioso ~alguns min e cronometre a 1ª chamada:
+time curl -s -o /dev/null $URL/health
+```
+
+Se o cold start observado se aproximar de 25 s, aumente `TIMEOUT_PADRAO_MS`.
+
+### Pendência (não bloqueia o deploy): role read-only no Postgres
+
+A conexão já abre em `default_transaction_read_only=on` (runtime), mas a **defesa
+definitiva** é um usuário/role do Postgres com **apenas `SELECT`** nas tabelas
+lidas (`opcao_cotahist`, `acao_cotahist`, `iv_history`, `watchlist`). Hoje a
+`DATABASE_URL` usa a role padrão (read/write). Criar essa role de leitura e
+trocar a `DATABASE_URL` do Railway para ela é **tarefa separada** — registrar e
+não esquecer.
 
 ## Estrutura
 

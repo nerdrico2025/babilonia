@@ -140,6 +140,15 @@ Handler que chama o serviço ainda **não** existe — próximo prompt).
   `iv_history` (conexão abre com `default_transaction_read_only=on`).
 - **Saúde:** `GET /health` — o Next.js confere que o serviço está de pé antes de
   disparar um cálculo. Detalhes de rodar/testar/deploy em `services/quant/README.md`.
+- **Deploy (Railway):** imagem Docker (`Dockerfile` + `railway.json` com
+  healthcheck `/health`), conta **Click Hero**, projeto `babilonia-quant`. O
+  Next.js (Vercel) o consome pela env var **`QUANT_SERVICE_URL`** (server-only)
+  apontando para o domínio público do Railway; sem ela, screening/backtest caem no
+  fallback de indisponibilidade. ⚠️ **A `DATABASE_URL` do serviço usa o endpoint
+  DIRETO do Neon (host sem `-pooler`)** — o PgBouncer do `-pooler` rejeita o
+  startup option `default_transaction_read_only=on` de `core/db.py` e a conexão
+  falha no boot. Runbook completo (CLI/painel, validação, cold start, role
+  read-only pendente) em `services/quant/README.md` §Deploy.
 
 ## Convenções
 

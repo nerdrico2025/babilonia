@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException
 from app.quant import backtest, dados
 from app.quant.backtest import DadosInsuficientesError, ResultadoBacktest
 from app.schemas import (
+    AjusteProventoOut,
     BacktestRequest,
     BacktestResponse,
     PontoSerieOut,
@@ -49,6 +50,7 @@ def _para_response(r: ResultadoBacktest) -> BacktestResponse:
                 pl_acumulado=p.pl_acumulado,
                 sem_negociacao=p.sem_negociacao,
                 fonte=p.fonte,
+                evento=p.evento,
             )
             for p in r.serie
         ],
@@ -61,6 +63,15 @@ def _para_response(r: ResultadoBacktest) -> BacktestResponse:
             dias_ate_vencimento=r.resumo.dias_ate_vencimento,
             liquidado_no_vencimento=r.resumo.liquidado_no_vencimento,
             avisos=r.resumo.avisos,
+            ajustes_provento=[
+                AjusteProventoOut(
+                    data_ex=a.data_ex,
+                    valor_ajuste_por_acao=a.valor_ajuste_por_acao,
+                    pernas_afetadas=a.pernas_afetadas,
+                    explicacao=a.explicacao,
+                )
+                for a in r.resumo.ajustes_provento
+            ],
         ),
     )
 

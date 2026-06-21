@@ -20,6 +20,7 @@ from app.quant.backtest import (
     EntradaBacktest,
     PernaBacktest,
     PontoPreco,
+    PontoStrike,
 )
 from app.quant.screening import CadeiaAtivo, OpcaoSerie
 
@@ -154,6 +155,31 @@ def buscar_historico_opcoes(
     return historico
 
 
+def buscar_strikes_opcoes(
+    conn, symbols: list[str], inicio: datetime, fim: datetime
+) -> dict[str, list[PontoStrike]]:
+    """
+    Linha do tempo do strike de cada série na janela [inicio, fim], ordenada por
+    pregão. Inclui TODOS os pregões (mesmo sem negócio), porque o ajuste por provento
+    muda o strike independentemente de ter havido negócio no dia — é o que permite
+    cravar a data-ex. Usado só para SINALIZAR ajustes (não entra no cálculo do P&L).
+    """
+    strikes: dict[str, list[PontoStrike]] = {s: [] for s in symbols}
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT option_symbol, trade_date, strike "
+            "FROM opcao_cotahist "
+            "WHERE option_symbol = ANY(%s) AND trade_date BETWEEN %s AND %s "
+            "ORDER BY option_symbol, trade_date",
+            (symbols, inicio, fim),
+        )
+        for symbol, trade_date, strike in cur.fetchall():
+            strikes.setdefault(symbol, []).append(
+                PontoStrike(data=trade_date, strike=_f(strike))
+            )
+    return strikes
+
+
 def buscar_spot_ate(conn, ativo: str, data: datetime) -> float | None:
     """Fechamento do ativo-objeto no pregão mais recente ATÉ `data` (≤ data)."""
     with conn.cursor() as cur:
@@ -205,6 +231,8 @@ def carregar_backtest(
         data_saida_efetiva = data_saida or vencimento
         # Carrega o histórico até o vencimento (o núcleo recorta pela data de saída).
         historico = buscar_historico_opcoes(conn, symbols, data_entrada, vencimento)
+        # Linha do tempo do strike (p/ detectar ajuste por provento — só sinalização).
+        strikes = buscar_strikes_opcoes(conn, symbols, data_entrada, vencimento)
         spot_vencimento = (
             buscar_spot_ate(conn, ativo, vencimento) if ativo != "—" else None
         )
@@ -231,4 +259,5 @@ def carregar_backtest(
         vencimento=vencimento,
         spot_vencimento=spot_vencimento,
         tamanho_lote=tamanho_lote,
+        strikes=strikes,
     )

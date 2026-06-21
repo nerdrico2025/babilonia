@@ -110,6 +110,18 @@ class PontoSerieOut(BaseModel):
     pl_acumulado: float
     sem_negociacao: bool  # True = ao menos uma perna sem negócio (carry-forward)
     fonte: Literal["mercado", "vencimento"]
+    # None = pregão comum; "ajuste_provento" = data-ex de um ajuste de strike (o salto
+    # nesse dia é evento corporativo, não movimento de mercado).
+    evento: Literal["ajuste_provento"] | None = None
+
+
+class AjusteProventoOut(BaseModel):
+    """Ajuste de strike por provento detectado na janela — só sinalização (§2)."""
+
+    data_ex: datetime
+    valor_ajuste_por_acao: float  # quanto o strike caiu por ação (BRL)
+    pernas_afetadas: list[str]
+    explicacao: str  # linguagem simples para o usuário leigo
 
 
 class ResumoBacktestOut(BaseModel):
@@ -122,6 +134,8 @@ class ResumoBacktestOut(BaseModel):
     dias_ate_vencimento: int
     liquidado_no_vencimento: bool
     avisos: list[str]
+    # Ajustes por provento detectados (vazio = nenhum). Não entra no P&L.
+    ajustes_provento: list[AjusteProventoOut] = []
 
 
 class BacktestResponse(BaseModel):

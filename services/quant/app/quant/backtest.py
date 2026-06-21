@@ -83,6 +83,19 @@ class PontoPreco:
 
 
 @dataclass(frozen=True)
+class PontoStrike:
+    """
+    O strike VIGENTE de uma perna num pregão. Diferente do prêmio, o strike é
+    "constante" no dia a dia — só muda quando há ajuste por evento corporativo
+    (provento em dinheiro reduz o strike; ver `_detectar_ajustes_provento`). Guardar
+    a linha do tempo do strike é o que permite DETECTAR o ajuste sem recalcular nada.
+    """
+
+    data: datetime
+    strike: float
+
+
+@dataclass(frozen=True)
 class EntradaBacktest:
     """
     Tudo que a simulação pura precisa, SEM banco. O `historico` traz, por ticker, a
@@ -97,11 +110,19 @@ class EntradaBacktest:
     vencimento: datetime
     spot_vencimento: float | None  # fechamento do objeto no vencimento (p/ payoff)
     tamanho_lote: int = om.TAMANHO_LOTE_PADRAO
+    # Linha do tempo do strike por ticker na janela (todos os pregões, inclusive sem
+    # negócio), para DETECTAR ajuste por provento. Opcional: vazio = sem detecção
+    # (o cálculo de P&L não depende disto — é só sinalização, §2).
+    strikes: dict[str, list[PontoStrike]] = field(default_factory=dict)
 
 
 # ── Saída ─────────────────────────────────────────────────────────────────────
 
 FontePonto = Literal["mercado", "vencimento"]
+#: Evento corporativo marcado no dia. None = pregão comum. "ajuste_provento" = dia em
+#: que o strike de ao menos uma perna foi ajustado por provento (data-ex) — para a UI
+#: não confundir o salto com movimento normal de mercado.
+EventoSerie = Literal["ajuste_provento"]
 
 
 @dataclass(frozen=True)
@@ -113,6 +134,22 @@ class PontoSerie:
     pl_acumulado: float  # P&L desde a entrada (BRL)
     sem_negociacao: bool  # True = ao menos uma perna sem negócio no dia (carry-forward)
     fonte: FontePonto  # "mercado" (fechamento real) | "vencimento" (payoff intrínseco)
+    evento: EventoSerie | None = None  # marca a data-ex de um ajuste de provento
+
+
+@dataclass(frozen=True)
+class AjusteProvento:
+    """
+    Um ajuste de strike por provento em dinheiro (dividendo/JCP) detectado DENTRO da
+    janela do backtest. NÃO altera nenhum número da simulação — é só transparência
+    (§2): explica ao usuário leigo por que o strike/breakeven mostrados estão na base
+    pós-ajuste e por que houve um "salto" na série na data-ex.
+    """
+
+    data_ex: datetime  # 1º pregão com o strike já ajustado (data-ex do provento)
+    valor_ajuste_por_acao: float  # quanto o strike caiu por ação (BRL), ex.: 0,54
+    pernas_afetadas: list[str]  # tickers cujo strike mudou nessa data
+    explicacao: str  # texto em linguagem simples para a UI/leigo
 
 
 @dataclass
@@ -127,6 +164,9 @@ class ResumoBacktest:
     dias_ate_vencimento: int  # dias corridos entrada → vencimento
     liquidado_no_vencimento: bool  # True = levado ao vencimento (payoff); False = saída antecipada
     avisos: list[str] = field(default_factory=list)
+    # Ajustes de strike por provento detectados na janela (vazio = nenhum). Só
+    # sinalização — não entra na conta do P&L (§2).
+    ajustes_provento: list[AjusteProvento] = field(default_factory=list)
 
 
 @dataclass
@@ -159,6 +199,69 @@ def _preco_exato(pontos: list[PontoPreco], data: datetime) -> float | None:
         if p.data == data:
             return p.preco
     return None
+
+
+# Texto em linguagem simples (público leigo §2) que acompanha cada ajuste detectado.
+EXPLICACAO_AJUSTE_PROVENTO = (
+    "Esta opção sofreu ajuste de strike por provento em dinheiro (dividendo/JCP) "
+    "nesta janela: na data-ex a B3 reduziu o strike pelo valor do provento. O strike "
+    "e o breakeven mostrados já estão na base pós-ajuste (ex-provento) — o salto na "
+    "série nesse dia é o ajuste do contrato, não um movimento normal de mercado."
+)
+
+
+def _detectar_ajustes_provento(
+    entrada: EntradaBacktest,
+) -> tuple[list[AjusteProvento], set[datetime]]:
+    """
+    Detecta, na janela [entrada, vencimento], quando o strike resolvido de uma perna
+    MUDOU (assinatura de ajuste por provento em dinheiro: a B3 reduz o strike na
+    data-ex). NÃO recalcula nada — apenas compara o strike vigente em cada pregão com
+    o anterior, usando a linha do tempo `entrada.strikes`.
+
+    Devolve (lista de `AjusteProvento` agrupada por data-ex + valor, conjunto das
+    datas-ex) — esta para marcar a série diária. Sem `entrada.strikes`, devolve vazio
+    (a detecção é opcional; a simulação roda igual).
+    """
+    # Eventos crus (data-ex, ticker, queda do strike) por perna.
+    eventos: list[tuple[datetime, str, float]] = []
+    for p in entrada.pernas:
+        # Só pregões da janela, em ordem; o 1º vira a referência (strike de entrada).
+        timeline = sorted(
+            (
+                pt
+                for pt in entrada.strikes.get(p.option_symbol, [])
+                if entrada.data_entrada <= pt.data <= entrada.vencimento
+            ),
+            key=lambda pt: pt.data,
+        )
+        anterior: float | None = None
+        for pt in timeline:
+            if anterior is not None and abs(pt.strike - anterior) > om.EPS:
+                # Provento em dinheiro REDUZ o strike → queda positiva = valor do provento.
+                eventos.append((pt.data, p.option_symbol, anterior - pt.strike))
+            anterior = pt.strike
+
+    # Agrupa por (data-ex, valor do ajuste arredondado) — um provento atinge várias
+    # pernas com a MESMA queda no MESMO dia (ex.: PETRE450/PETRE455, −0,54 em 23/04).
+    grupos: dict[tuple[datetime, float], list[str]] = {}
+    for data_ex, symbol, queda in sorted(eventos, key=lambda e: (e[0], e[1])):
+        chave = (data_ex, round(queda, 4))
+        grupos.setdefault(chave, [])
+        if symbol not in grupos[chave]:
+            grupos[chave].append(symbol)
+
+    ajustes = [
+        AjusteProvento(
+            data_ex=data_ex,
+            valor_ajuste_por_acao=round(valor, 2),
+            pernas_afetadas=pernas,
+            explicacao=EXPLICACAO_AJUSTE_PROVENTO,
+        )
+        for (data_ex, valor), pernas in sorted(grupos.items(), key=lambda g: g[0][0])
+    ]
+    datas_ex = {a.data_ex for a in ajustes}
+    return ajustes, datas_ex
 
 
 def _legs_om(pernas: list[PernaBacktest], premios: dict[str, float]) -> list[om.Leg]:
@@ -273,6 +376,10 @@ def simular(entrada: EntradaBacktest) -> ResultadoBacktest:
     # Marcação por perna ao longo da grade (carry-forward, sem look-ahead).
     marcacoes = {p.option_symbol: _marcar_perna(entrada.historico[p.option_symbol], grid) for p in pernas}
 
+    # Detecta ajustes de strike por provento na janela (só sinalização — não muda
+    # número nenhum). `datas_ex` marca os dias para a série não parecer mercado comum.
+    ajustes, datas_ex = _detectar_ajustes_provento(entrada)
+
     serie: list[PontoSerie] = []
     for idx, dia in enumerate(grid):
         valor = 0.0
@@ -293,6 +400,7 @@ def simular(entrada: EntradaBacktest) -> ResultadoBacktest:
                 pl_acumulado=pl,
                 sem_negociacao=sem_negociacao,
                 fonte="mercado",
+                evento="ajuste_provento" if dia in datas_ex else None,
             )
         )
 
@@ -341,6 +449,7 @@ def simular(entrada: EntradaBacktest) -> ResultadoBacktest:
         dias_ate_vencimento=(entrada.vencimento - entrada.data_entrada).days,
         liquidado_no_vencimento=liquidado_efetivo,
         avisos=avisos,
+        ajustes_provento=ajustes,
     )
 
     return ResultadoBacktest(

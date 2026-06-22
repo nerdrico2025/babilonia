@@ -99,6 +99,13 @@ export function PosicoesLista({
                 </span>
               </div>
 
+              {/* Rótulo DEFINIDO/INDEFINIDO já na linha resumida (§2): risco antes do
+                  ganho, visível sem precisar expandir. Oculto só em telas estreitas
+                  (a pílula é larga) — o valor de risco à direita aparece em todas. */}
+              <span className="hidden lg:inline-flex">
+                <RotuloRisco tipo={p.riskDefined ? "definido" : "indefinido"} />
+              </span>
+
               {/* Vencimento com semáforo. */}
               <span className="hidden items-center gap-1.5 sm:inline-flex">
                 <Semaforo nivel={NIVEL_POR_COR[venc.semaforo]} mostrarRotulo={false} />

@@ -28,14 +28,15 @@ sutil) e **6 Baixos** (polimento). Os Médios concentravam-se em (a) um botão
 para o termo errado e (c) o carimbo de frescor mostrando **hora** em dado que é de
 **fechamento (EOD)**.
 
-**Estado atual (22/06/2026):** os **3 Médios estão corrigidos** (M1, M2, M3), e o
-Baixo #4 foi junto na correção do M2. Restam **5 Baixos** (polimento), todos abertos.
+**Estado atual (22/06/2026):** os **3 Médios estão corrigidos** (M1, M2, M3); entre
+os Baixos, o #4 saiu na correção do M2 e o **#5 (coluna OI) foi corrigido**. Restam
+**4 Baixos** (polimento), abertos.
 
 | Severidade | Total | Corrigidos | Abertos |
 | ---------- | ----- | ---------- | ------- |
 | Alta       | 0     | 0          | 0       |
 | Média      | 3     | 3          | 0       |
-| Baixa      | 6     | 1          | 5       |
+| Baixa      | 6     | 2          | 4       |
 
 ## 2. Tabela de achados
 
@@ -45,7 +46,7 @@ Baixo #4 foi junto na correção do M2. Restam **5 Baixos** (polimento), todos a
 | 2 | Ticket | Princípio (educativo) | Média | A palavra **"ticker"** está embrulhada em `<TermoTecnico termo="strike">` — o tooltip mostra a definição de *strike*, não de ticker. | Trocar o termo (não há "ticker" no glossário): remover o `<TermoTecnico>` ou criar o verbete. | ✅ `484a572` |
 | 3 | Análise (fund./volat.) | Princípio (dados EOD §6.2) | Média | `FrescorBadge` carimba **"Dado de HH:MM · atualizado agora"** (hora), mas o dado é de **fechamento/EOD** — sugere cotação ao vivo. | Trocar `fmtHora` por data de pregão (DD/MM) no badge dos blocos derivados de EOD. | ✅ `1dd7736` |
 | 4 | Cadeia | Princípio (educativo) | Baixa | Hint inicial embrulha **"calls e puts"** em `<TermoTecnico termo="strike">` (termo trocado). | Usar termo próprio (ou nenhum) para "calls e puts"; reservar "strike" para o strike. | ✅ `484a572` |
-| 5 | Cadeia | Visual / Princípio (§6.4) | Baixa | Coluna **"OI"** sempre exibe "n/d" (open interest não existe na fonte) — jargão e ruído permanentes para o leigo. | Remover a coluna OI (a nota de liquidez já explica) ou rebaixar para tooltip do cabeçalho. | 🔴 aberto |
+| 5 | Cadeia | Visual / Princípio (§6.4) | Baixa | Coluna **"OI"** sempre exibe "n/d" (open interest não existe na fonte) — jargão e ruído permanentes para o leigo. | Remover a coluna OI (a nota de liquidez já explica) ou rebaixar para tooltip do cabeçalho. | ✅ `bf0de23` |
 | 6 | Ticket, Histórico | Visual (consistência) | Baixa | Usam `<select>` **HTML nativo**; o componente shadcn `ui/select.tsx` existe e **não é usado em lugar nenhum** — selects destoam do design system. | Padronizar nos selects shadcn, ou assumir o nativo e remover o componente órfão. | 🔴 aberto |
 | 7 | Análise | Fluxo / Visual (loading) | Baixa | Durante a busca, só o spinner do botão aparece; a área dos 3 blocos fica **em branco** (cadeia/screening/backtest têm aviso de loading; a análise não). | Mostrar aviso/skeleton "Carregando análise de XXXX…" enquanto busca. | 🔴 aberto |
 | 8 | Dashboard | Princípio (§2 rótulo) | Baixa | Na linha **colapsada** da posição, o selo `RotuloRisco` (DEFINIDO/INDEFINIDO) só aparece ao expandir; colapsada mostra só o texto "INDEFINIDO"/valor. | Exibir um mini-selo DEFINIDO/INDEFINIDO também na linha colapsada. | 🔴 aberto |
@@ -157,7 +158,8 @@ foco desta passada):
 | 22/06/2026 | M2 + #4 | `484a572` | `fix(ux): corrige TermoTecnico com termo="strike" em campo de ticker (M2)` — verbete "ticker" no glossário; ticket usa `termo="ticker"`; corrige também "calls e puts" na Cadeia (#4). |
 | 22/06/2026 | M3 | `1dd7736` | `fix(ux): FrescorBadge não promete realtime em dado EOD; aviso EOD no bloco Volatilidade (M3)` — prop `tipoFonte` (default `eod`); Fundamentalista marcado `realtime`; aviso EOD na Volatilidade. |
 | 22/06/2026 | M1 | `81a918c` | `fix(ux): remove/habilita botão "em breve" no montador — recurso de cadeia já existe (M1)` — botão desabilitado removido (Opção A) e substituído por link de descoberta para a Cadeia. |
+| 22/06/2026 | #5 (B1) | `bf0de23` | `fix(ux): coluna OI na cadeia — conecta dado real ou remove com aviso honesto (B1)` — investigação confirmou que OI **não existe no COTAHIST** (nem no layout B3 Rev 02, nem no schema/parser); coluna 100% "n/d" removida. A nota honesta `NOTA_LIQUIDEZ` (visível abaixo da tabela) e o verbete "open-interest" no glossário já explicam a ausência. |
 
-**Próximos candidatos (Baixos abertos):** #5 (coluna OI sempre "n/d"), #6 (`<select>`
-nativo vs. shadcn `Select` órfão), #7 (loading em branco na Análise), #8 (selo
-DEFINIDO/INDEFINIDO na linha colapsada do Dashboard), #9 (`EmConstrucao` morto).
+**Próximos candidatos (Baixos abertos):** #6 (`<select>` nativo vs. shadcn `Select`
+órfão), #7 (loading em branco na Análise), #8 (selo DEFINIDO/INDEFINIDO na linha
+colapsada do Dashboard), #9 (`EmConstrucao` morto).

@@ -6,7 +6,9 @@ import { AlertTriangle, Loader2, Search } from "lucide-react";
 import { DisclaimerNota } from "@/components/disclaimer";
 import { TermoTecnico } from "@/components/educativo/termo-tecnico";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { BlocoFundamentalista } from "./bloco-fundamentalista";
 import { BlocoTecnico } from "./bloco-tecnico";
@@ -122,6 +124,10 @@ export function AnaliseCliente() {
         </div>
       )}
 
+      {/* Carregando a 1ª análise (sem dados anteriores): skeletons no lugar da área
+          em branco. Em re-buscas, os blocos antigos ficam e o botão mostra o spinner. */}
+      {carregando && !dadosAtivo && <BlocosSkeleton />}
+
       {dadosAtivo && (
         <>
           <BlocoTecnico
@@ -145,6 +151,36 @@ export function AnaliseCliente() {
           />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Placeholders enquanto a 1ª análise carrega: três cartões na altura aproximada dos
+ * blocos (Técnico, Fundamentalista, Volatilidade), para não deixar a tela em branco
+ * nem causar "pulo" de layout quando o conteúdo real chega.
+ */
+function BlocosSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-busy aria-label="Carregando análise do ativo">
+      {[0, 1, 2].map((i) => (
+        <Card key={i}>
+          <CardHeader className="gap-2">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3 w-64" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[0, 1, 2, 3].map((j) => (
+                <Skeleton key={j} className="h-12 rounded-lg" />
+              ))}
+            </div>
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }

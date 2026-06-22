@@ -520,7 +520,6 @@ function TabelaCadeia({
           <TableHead><TermoTecnico termo="premio">Prêmio</TermoTecnico> (bid/ask)</TableHead>
           <TableHead className="text-right">Volume</TableHead>
           <TableHead className="text-right"><TermoTecnico termo="spread">Spread</TermoTecnico></TableHead>
-          <TableHead className="text-right"><TermoTecnico termo="open-interest">OI</TermoTecnico></TableHead>
           <TableHead><TermoTecnico termo="liquidez">Liquidez</TermoTecnico></TableHead>
           <TableHead className="text-right"><TermoTecnico termo="delta">Δ</TermoTecnico></TableHead>
           <TableHead className="text-right"><TermoTecnico termo="gama">Γ</TermoTecnico></TableHead>
@@ -559,18 +558,6 @@ function TabelaCadeia({
               <TableCell className="text-right tabular">{op.volume ?? "—"}</TableCell>
               <TableCell className="text-right tabular">
                 {op.spread != null ? formatPreco(op.spread) : "—"}
-              </TableCell>
-              <TableCell className="text-right">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={<span className="cursor-help text-xs text-muted-foreground underline decoration-dotted" />}
-                  >
-                    n/d
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    Open interest não é fornecido pelo COTAHIST/B3 (§6.4). A liquidez usa volume, número de negócios e spread.
-                  </TooltipContent>
-                </Tooltip>
               </TableCell>
               <TableCell>
                 <BadgeLiquidez liq={liq} />

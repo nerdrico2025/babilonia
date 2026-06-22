@@ -141,7 +141,7 @@ describe.skipIf(!TEM_DB)("getVolatilidadeCotahist (banco real)", () => {
     // 6m preenchido.
     expect(volatilidade.ivRank6m).not.toBeNull();
     expect(volatilidade.ivPercentil6m).not.toBeNull();
-  });
+  }, 15000);
 
   it("ECOR3: histórico insuficiente → estado 'insuficiente' e ranks null", async () => {
     const { volatilidade } = await getVolatilidadeCotahist("ECOR3");
@@ -152,5 +152,5 @@ describe.skipIf(!TEM_DB)("getVolatilidadeCotahist (banco real)", () => {
     expect(volatilidade.ivRank6m).toBeNull();
     // ivAtual ainda é exibível (última IV diária), em percentual.
     expect(volatilidade.ivAtual).not.toBeNull();
-  });
+  }, 15000);
 });

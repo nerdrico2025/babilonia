@@ -18,5 +18,11 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.{test,spec}.{ts,tsx}"],
     exclude: ["node_modules", ".next"],
+    // Timeout global de 15 s: os testes de "banco real" (Neon serverless) sofrem
+    // com cold start e latência de rede — 5 s estoura sem haver falha de lógica.
+    testTimeout: 15000,
+    // Isola cada arquivo em seu próprio processo (fork): o cold start da conexão
+    // Neon de um arquivo não bloqueia os outros.
+    pool: "forks",
   },
 });

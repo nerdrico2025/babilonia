@@ -168,7 +168,7 @@ describe.skipIf(!TEM_DB)("getGregasCotahist (banco real)", () => {
     expect(g.probExercicio!).toBeLessThanOrEqual(100);
     expect(["ITM", "ATM", "OTM"]).toContain(g.moneyness);
     expect(g.margem).toBeNull();
-  });
+  }, 15000);
 
   it("override de vol/r é respeitado (iv = vol; sem rede)", async () => {
     const { symbol } = await escolherCallPetr4();
@@ -176,5 +176,5 @@ describe.skipIf(!TEM_DB)("getGregasCotahist (banco real)", () => {
     const { gregas: g } = await getGregasCotahist(symbol, { vol: 30, r: 0.1 });
     expect(g.iv).toBeCloseTo(30, 6);
     expect(g.delta).not.toBeNull();
-  });
+  }, 15000);
 });

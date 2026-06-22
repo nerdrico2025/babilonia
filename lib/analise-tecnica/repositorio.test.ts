@@ -169,16 +169,16 @@ describe.skipIf(!TEM_DB)("obterCandles (Neon real)", () => {
     // frescor: a data do último candle == obterDataUltimoCandle
     const ultima = await obterDataUltimoCandle("PETR4");
     expect(candles.at(-1)!.data).toBe(ultima!.toISOString());
-  });
+  }, 15000);
 
   it("limite > disponível devolve todo o histórico sem erro (≈363 pregões)", async () => {
     const candles = await obterCandles("PETR4", { limite: 5000 });
     expect(candles.length).toBeGreaterThan(0);
     // não estoura nem trunca em 5000 — devolve o que existe.
     expect(candles.length).toBeLessThan(5000);
-  });
+  }, 15000);
 
   it("ticker fora da watchlist → [] (sem lançar)", async () => {
     expect(await obterCandles("ZZZZ99")).toEqual([]);
-  });
+  }, 15000);
 });

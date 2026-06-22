@@ -254,7 +254,7 @@ describe.skipIf(!TEM_DB)("getCadeiaCotahist (banco real)", () => {
     expect(cadeia.openInterestDisponivel).toBe(false);
     expect(cadeia.gregasNaCadeia).toBe(false);
     expect(cadeia.notaLiquidez).toBe(NOTA_LIQUIDEZ);
-  });
+  }, 15000);
 
   it("degrada coerente para um ativo sem dado (fora da watchlist)", async () => {
     const { cadeia, asOf } = await getCadeiaCotahist("ZZZZ999");
@@ -263,5 +263,5 @@ describe.skipIf(!TEM_DB)("getCadeiaCotahist (banco real)", () => {
     expect(cadeia.precoAtivo).toBeNull();
     expect(cadeia.ivAtual).toBeNull();
     expect(cadeia.ativo).toBe("ZZZZ999");
-  });
+  }, 15000);
 });

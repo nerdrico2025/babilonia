@@ -81,7 +81,7 @@ export function BlocoFundamentalista({
         </CardTitle>
         <CardDescription className="flex flex-wrap items-center justify-between gap-2">
           <span>Múltiplos, retornos, proventos e resultados.</span>
-          <FrescorBadge frescor={frescorFundamentos} />
+          <FrescorBadge frescor={frescorFundamentos} tipoFonte="realtime" />
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

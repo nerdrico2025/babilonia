@@ -15,20 +15,59 @@ export function fmtHora(iso: string): string {
   }).format(new Date(iso));
 }
 
+/**
+ * "DD/MM/AAAA" em UTC, para datar um dado de FECHAMENTO (EOD). O `geradoEm` de um
+ * dado EOD é o `trade_date` (meia-noite UTC); formatar em UTC evita recuar um dia
+ * no fuso de São Paulo. Usado quando a fonte é de fechamento, não tempo real (§6.2).
+ */
+export function fmtDataEod(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(iso));
+}
+
 /** Número genérico em pt-BR (até 2 casas). */
 export function fmtNum(v: number | null, casas = 2): string {
   return v == null ? "—" : v.toLocaleString("pt-BR", { maximumFractionDigits: casas });
 }
 
-/** Linha discreta de frescor do dado (§6.3): de quando é e de onde veio. */
-export function FrescorBadge({ frescor }: { frescor: Frescor | null }) {
+/**
+ * Linha discreta de frescor do dado (§6.3): de quando é e de onde veio.
+ *
+ * `tipoFonte` decide a forma do carimbo:
+ *  - `eod` (default): dado de FECHAMENTO (COTAHIST / `iv_history`). Carimba a DATA
+ *    do pregão ("Fechamento de DD/MM/AAAA"), NUNCA hora nem "atualizado agora" — o
+ *    app não promete cotação ao vivo (§6.2);
+ *  - `realtime`: dado com timestamp real de busca (ex.: fundamentos da bolsai).
+ *    Mantém o formato com hora + origem.
+ */
+export function FrescorBadge({
+  frescor,
+  tipoFonte = "eod",
+}: {
+  frescor: Frescor | null;
+  tipoFonte?: "eod" | "realtime";
+}) {
   if (!frescor) return null;
+
   const rotulo =
     frescor.origem === "rede"
       ? "atualizado agora"
       : frescor.origem === "cache"
         ? "em cache"
         : "cache (fonte indisponível)";
+
+  // Aviso pronto da fonte (fallback de cache, §6.3) tem prioridade. Senão, o
+  // carimbo depende da fonte: EOD → data de fechamento; realtime → hora + origem.
+  const texto =
+    frescor.aviso ??
+    (tipoFonte === "eod"
+      ? `Fechamento de ${fmtDataEod(frescor.geradoEm)}`
+      : `Dado de ${fmtHora(frescor.geradoEm)} · ${rotulo}`);
+
   return (
     <span
       className={cn(
@@ -37,7 +76,7 @@ export function FrescorBadge({ frescor }: { frescor: Frescor | null }) {
       )}
     >
       <Clock className="size-3" aria-hidden />
-      {frescor.aviso ?? `Dado de ${fmtHora(frescor.geradoEm)} · ${rotulo}`}
+      {texto}
     </span>
   );
 }

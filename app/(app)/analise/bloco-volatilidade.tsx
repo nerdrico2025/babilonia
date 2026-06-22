@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Activity } from "lucide-react";
+import { Activity, Info } from "lucide-react";
 
 import { TermoTecnico } from "@/components/educativo/termo-tecnico";
 import {
@@ -17,7 +17,7 @@ import type { ResultadoSkewAutomatico } from "@/lib/dados-opcoes/skew";
 import type { VolatilidadeAtivo } from "@/lib/opcoes/tipos";
 import { formatPreco } from "@/lib/format";
 
-import { FrescorBadge, Indicador, LeituraIniciante } from "./analise-ui";
+import { FrescorBadge, fmtDataEod, Indicador, LeituraIniciante } from "./analise-ui";
 import type { Frescor } from "./tipos";
 
 function parseNum(s: string): number | null {
@@ -93,6 +93,18 @@ export function BlocoVolatilidade({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {/* Aviso EOD (§6.2): IV/IV Rank vêm do fechamento (iv_history), não ao vivo —
+            mesmo aviso datado que o bloco Técnico exibe para o preço. */}
+        <div className="flex items-start gap-2 rounded-lg border border-risco-alerta/40 bg-risco-alerta/10 px-3 py-2 text-sm text-risco-alerta">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {frescor
+              ? `Dados de fechamento de ${fmtDataEod(frescor.geradoEm)} — `
+              : "Dados de fechamento — "}
+            a volatilidade é calculada sobre o pregão de fechamento, não em tempo real.
+          </span>
+        </div>
+
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Indicador
             rotulo={<TermoTecnico termo="volatilidade-implicita">IV atual</TermoTecnico>}

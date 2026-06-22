@@ -10,7 +10,7 @@ import {
 /**
  * Testes da integração bolsai. As respostas são MOCKADAS (fetch injetado) e o
  * cache é um store em memória — nada toca a rede nem o Postgres. Os fixtures são
- * os JSONs REAIS coletados no teste throwaway (scripts/teste-bolsai.ts), não
+ * os JSONs REAIS coletados da bolsai durante a migração de fundamentos, não
  * formato inventado. Cobrem: parse/mapeamento sem transformar percentuais, null
  * propagado, campos extras aceitos, e cache-hit / cache-expirado / erro→fallback.
  */

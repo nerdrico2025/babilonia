@@ -15,7 +15,7 @@ import {
 /**
  * Testes do frescor sobre a tabela `fundamentos` (5.4). O repositório é um store
  * em MEMÓRIA e a busca na bolsai é INJETADA — nada toca Postgres nem rede. O
- * fixture é o domínio mapeado do JSON real do PETR4 (scripts/teste-bolsai.ts).
+ * fixture é o domínio mapeado do JSON real do PETR4 coletado da bolsai.
  */
 
 // ── Infra de teste ───────────────────────────────────────────────────────────

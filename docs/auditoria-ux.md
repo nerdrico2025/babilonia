@@ -1,12 +1,14 @@
 # Auditoria de UX — Babilônia
 
-**Data:** 22/06/2026 · **Método:** leitura do código-fonte das telas (`app/`) e
-componentes (`components/`). Sem browser, sem alteração de código.
+**Auditoria original:** 22/06/2026 · **Última atualização:** 22/06/2026 ·
+**Método:** leitura do código-fonte das telas (`app/`) e componentes (`components/`).
 **Escopo:** as 9 telas do §14 do PRD, contra critérios Visual / Fluxo / Princípios
 do PRD (§2).
 
-> Esta é uma auditoria de **levantamento** — lista achados, não corrige nada.
-> Cada achado traz uma sugestão de uma linha para uma futura rodada de ajustes.
+> **Registro vivo do UX review** — não é só o snapshot inicial. A auditoria
+> levantou os achados; conforme cada um é corrigido, esta página é atualizada com o
+> status e o commit. Coluna **Status**: 🔴 aberto · ✅ corrigido (com hash). O
+> histórico de correções fica na §5.
 
 ## 1. Resumo executivo
 
@@ -21,30 +23,33 @@ banco fora, cadeia ausente, serviço de quant "acordando").
 
 **Nenhum achado de severidade Alta** — nada quebra o uso. Foram levantados **9
 achados**: **3 Médios** (incomodam ou contrariam um princípio do PRD de forma
-sutil) e **6 Baixos** (polimento). Os Médios concentram-se em (a) um botão
-"em breve" que contradiz um recurso já entregue, (b) um tooltip educativo apontando
+sutil) e **6 Baixos** (polimento). Os Médios concentravam-se em (a) um botão
+"em breve" que contradizia um recurso já entregue, (b) um tooltip educativo apontando
 para o termo errado e (c) o carimbo de frescor mostrando **hora** em dado que é de
 **fechamento (EOD)**.
 
-| Severidade | Qtde |
-| ---------- | ---- |
-| Alta       | 0    |
-| Média      | 3    |
-| Baixa      | 6    |
+**Estado atual (22/06/2026):** os **3 Médios estão corrigidos** (M1, M2, M3), e o
+Baixo #4 foi junto na correção do M2. Restam **5 Baixos** (polimento), todos abertos.
+
+| Severidade | Total | Corrigidos | Abertos |
+| ---------- | ----- | ---------- | ------- |
+| Alta       | 0     | 0          | 0       |
+| Média      | 3     | 3          | 0       |
+| Baixa      | 6     | 1          | 5       |
 
 ## 2. Tabela de achados
 
-| # | Tela | Categoria | Sev. | Problema | Sugestão |
-|---|------|-----------|------|----------|----------|
-| 1 | Montador | Fluxo | Média | Botão **"Trazer da cadeia (em breve)"** desabilitado + texto "Preencha manualmente", mas o pré-preenchimento pela cadeia **já existe** (banner + `prefillDaCadeia`). | Remover o botão/aviso "em breve"; quando há séries da cadeia, mostrar que vieram preenchidas. |
-| 2 | Ticket | Princípio (educativo) | Média | A palavra **"ticker"** está embrulhada em `<TermoTecnico termo="strike">` — o tooltip mostra a definição de *strike*, não de ticker. | Trocar o termo (não há "ticker" no glossário): remover o `<TermoTecnico>` ou criar o verbete. |
-| 3 | Análise (fund./volat.) | Princípio (dados EOD §6.2) | Média | `FrescorBadge` carimba **"Dado de HH:MM · atualizado agora"** (hora), mas o dado é de **fechamento/EOD** — sugere cotação ao vivo. | Trocar `fmtHora` por data de pregão (DD/MM) no badge dos blocos derivados de EOD. |
-| 4 | Cadeia | Princípio (educativo) | Baixa | Hint inicial embrulha **"calls e puts"** em `<TermoTecnico termo="strike">` (termo trocado). | Usar termo próprio (ou nenhum) para "calls e puts"; reservar "strike" para o strike. |
-| 5 | Cadeia | Visual / Princípio (§6.4) | Baixa | Coluna **"OI"** sempre exibe "n/d" (open interest não existe na fonte) — jargão e ruído permanentes para o leigo. | Remover a coluna OI (a nota de liquidez já explica) ou rebaixar para tooltip do cabeçalho. |
-| 6 | Ticket, Histórico | Visual (consistência) | Baixa | Usam `<select>` **HTML nativo**; o componente shadcn `ui/select.tsx` existe e **não é usado em lugar nenhum** — selects destoam do design system. | Padronizar nos selects shadcn, ou assumir o nativo e remover o componente órfão. |
-| 7 | Análise | Fluxo / Visual (loading) | Baixa | Durante a busca, só o spinner do botão aparece; a área dos 3 blocos fica **em branco** (cadeia/screening/backtest têm aviso de loading; a análise não). | Mostrar aviso/skeleton "Carregando análise de XXXX…" enquanto busca. |
-| 8 | Dashboard | Princípio (§2 rótulo) | Baixa | Na linha **colapsada** da posição, o selo `RotuloRisco` (DEFINIDO/INDEFINIDO) só aparece ao expandir; colapsada mostra só o texto "INDEFINIDO"/valor. | Exibir um mini-selo DEFINIDO/INDEFINIDO também na linha colapsada. |
-| 9 | (infra) | Visual (dívida) | Baixa | `EmConstrucao` ("chega na Fase 1") em `layout/pagina.tsx` é **código morto** — nenhuma tela o usa mais (Fases 0–3 concluídas). | Remover o componente `EmConstrucao` para não voltar a aparecer por engano. |
+| # | Tela | Categoria | Sev. | Problema | Sugestão | Status |
+|---|------|-----------|------|----------|----------|--------|
+| 1 | Montador | Fluxo | Média | Botão **"Trazer da cadeia (em breve)"** desabilitado + texto "Preencha manualmente", mas o pré-preenchimento pela cadeia **já existe** (banner + `prefillDaCadeia`). | Remover o botão/aviso "em breve"; quando há séries da cadeia, mostrar que vieram preenchidas. | ✅ `81a918c` |
+| 2 | Ticket | Princípio (educativo) | Média | A palavra **"ticker"** está embrulhada em `<TermoTecnico termo="strike">` — o tooltip mostra a definição de *strike*, não de ticker. | Trocar o termo (não há "ticker" no glossário): remover o `<TermoTecnico>` ou criar o verbete. | ✅ `484a572` |
+| 3 | Análise (fund./volat.) | Princípio (dados EOD §6.2) | Média | `FrescorBadge` carimba **"Dado de HH:MM · atualizado agora"** (hora), mas o dado é de **fechamento/EOD** — sugere cotação ao vivo. | Trocar `fmtHora` por data de pregão (DD/MM) no badge dos blocos derivados de EOD. | ✅ `1dd7736` |
+| 4 | Cadeia | Princípio (educativo) | Baixa | Hint inicial embrulha **"calls e puts"** em `<TermoTecnico termo="strike">` (termo trocado). | Usar termo próprio (ou nenhum) para "calls e puts"; reservar "strike" para o strike. | ✅ `484a572` |
+| 5 | Cadeia | Visual / Princípio (§6.4) | Baixa | Coluna **"OI"** sempre exibe "n/d" (open interest não existe na fonte) — jargão e ruído permanentes para o leigo. | Remover a coluna OI (a nota de liquidez já explica) ou rebaixar para tooltip do cabeçalho. | 🔴 aberto |
+| 6 | Ticket, Histórico | Visual (consistência) | Baixa | Usam `<select>` **HTML nativo**; o componente shadcn `ui/select.tsx` existe e **não é usado em lugar nenhum** — selects destoam do design system. | Padronizar nos selects shadcn, ou assumir o nativo e remover o componente órfão. | 🔴 aberto |
+| 7 | Análise | Fluxo / Visual (loading) | Baixa | Durante a busca, só o spinner do botão aparece; a área dos 3 blocos fica **em branco** (cadeia/screening/backtest têm aviso de loading; a análise não). | Mostrar aviso/skeleton "Carregando análise de XXXX…" enquanto busca. | 🔴 aberto |
+| 8 | Dashboard | Princípio (§2 rótulo) | Baixa | Na linha **colapsada** da posição, o selo `RotuloRisco` (DEFINIDO/INDEFINIDO) só aparece ao expandir; colapsada mostra só o texto "INDEFINIDO"/valor. | Exibir um mini-selo DEFINIDO/INDEFINIDO também na linha colapsada. | 🔴 aberto |
+| 9 | (infra) | Visual (dívida) | Baixa | `EmConstrucao` ("chega na Fase 1") em `layout/pagina.tsx` é **código morto** — nenhuma tela o usa mais (Fases 0–3 concluídas). | Remover o componente `EmConstrucao` para não voltar a aparecer por engano. | 🔴 aberto |
 
 ## 3. Achados por tela (Média e Alta — detalhe)
 
@@ -66,6 +71,13 @@ pode levar o iniciante a achar que precisa redigitar tudo. (Comentário no códi
 diferencial. **Sugestão:** remover o aviso/botão "em breve"; com séries presentes,
 o banner já comunica o pré-preenchimento.
 
+> **✅ Corrigido — `81a918c`.** Opção A: o botão desabilitado foi removido. Para não
+> deixar quem chega direto ao montador sem caminho de descoberta, a caixa-dica virou
+> um ponteiro textual com link para a Cadeia ("…ou escolha as séries na Cadeia e elas
+> vêm preenchidas aqui"). Opção B (abrir a Cadeia com o ativo pré-selecionado) foi
+> descartada porque exigiria alterar `cadeia-cliente.tsx` (lê o ticker de um input,
+> não da URL). Comentário obsoleto "Prompt 13" também removido.
+
 ### Achado 2 — Ticket: tooltip de "ticker" aponta para "strike" (Média · Princípio educativo)
 
 `app/(app)/ticket/ticket-cliente.tsx` (~linha 325), na descrição "Informe o
@@ -79,6 +91,12 @@ slug errado).
 **Impacto:** ensina o conceito errado num ponto crítico (preenchimento do ticket).
 **Sugestão:** remover o `<TermoTecnico>` de "ticker" (palavra já familiar) ou criar
 o verbete "ticker" no glossário e apontar para ele.
+
+> **✅ Corrigido — `484a572`.** Criado o verbete **"ticker"** em `lib/glossario.ts`
+> (categoria Operação: "código de negociação de uma série de opção na B3, ex.:
+> PETRE450") e o ticket passou a usar `termo="ticker"`. O grep por `termo="strike"`
+> revelou a **mesma classe de erro no achado #4** (Cadeia, "calls e puts"); ambos
+> foram corrigidos no mesmo commit.
 
 ### Achado 3 — Análise: frescor com hora em dado de fechamento (Média · Princípio §6.2)
 
@@ -95,6 +113,14 @@ tem esse contrapeso.
 **Impacto:** contraria um princípio não-negociável (dado EOD, nunca "ao vivo") e
 pode iludir o iniciante. **Sugestão:** no `FrescorBadge`, exibir a **data do pregão**
 (DD/MM) em vez da hora para blocos derivados de EOD.
+
+> **✅ Corrigido — `1dd7736`.** O `FrescorBadge` ganhou a prop `tipoFonte:
+> 'eod' | 'realtime'` (default `eod`): EOD carimba "Fechamento de DD/MM/AAAA" (sem
+> hora, sem "atualizado agora"); `realtime` preserva o formato com hora. Técnico e
+> Volatilidade ficam no default `eod`; **Fundamentalista** foi marcado `realtime`,
+> pois seu `geradoEm` é o instante real de busca na bolsai (não um fechamento de
+> pregão). O bloco **Volatilidade** ganhou o mesmo aviso EOD datado que o Técnico já
+> tinha.
 
 ## 4. Fora do escopo desta auditoria
 
@@ -123,3 +149,15 @@ foco desta passada):
 > estados de loading de dados externos. O **brapi foi aposentado** (migração para
 > bolsai + COTAHIST, 2026-06-19); a avaliação de loading considerou as fontes
 > atuais (`/api/ativo`, `/api/cadeia`, `/api/screening`, `/api/backtest`).
+
+## 5. Histórico de correções
+
+| Data | Achados | Commit | Resumo |
+|------|---------|--------|--------|
+| 22/06/2026 | M2 + #4 | `484a572` | `fix(ux): corrige TermoTecnico com termo="strike" em campo de ticker (M2)` — verbete "ticker" no glossário; ticket usa `termo="ticker"`; corrige também "calls e puts" na Cadeia (#4). |
+| 22/06/2026 | M3 | `1dd7736` | `fix(ux): FrescorBadge não promete realtime em dado EOD; aviso EOD no bloco Volatilidade (M3)` — prop `tipoFonte` (default `eod`); Fundamentalista marcado `realtime`; aviso EOD na Volatilidade. |
+| 22/06/2026 | M1 | `81a918c` | `fix(ux): remove/habilita botão "em breve" no montador — recurso de cadeia já existe (M1)` — botão desabilitado removido (Opção A) e substituído por link de descoberta para a Cadeia. |
+
+**Próximos candidatos (Baixos abertos):** #5 (coluna OI sempre "n/d"), #6 (`<select>`
+nativo vs. shadcn `Select` órfão), #7 (loading em branco na Análise), #8 (selo
+DEFINIDO/INDEFINIDO na linha colapsada do Dashboard), #9 (`EmConstrucao` morto).

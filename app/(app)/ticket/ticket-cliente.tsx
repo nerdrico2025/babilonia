@@ -25,6 +25,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { lerRascunho, limparRascunho, type RascunhoOperacao } from "@/lib/montador/rascunho";
 import {
   gerarTicket,
@@ -34,7 +41,6 @@ import {
   type TipoOrdem,
   type Validade,
 } from "@/lib/ticket";
-import { cn } from "@/lib/utils";
 
 import { persistirTicket, type TicketPayload } from "./actions";
 import { rolarPosition } from "../historico/actions";
@@ -582,20 +588,22 @@ function CampoSelect({
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium">{rotulo}</label>
-      <select
-        id={id}
+      <Select
         value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30",
-        )}
+        onValueChange={(v) => onChange((v ?? "") as string)}
+        items={opcoes.map((o) => ({ label: o.rotulo, value: o.valor }))}
       >
-        {opcoes.map((o) => (
-          <option key={o.valor} value={o.valor}>
-            {o.rotulo}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {opcoes.map((o) => (
+            <SelectItem key={o.valor} value={o.valor}>
+              {o.rotulo}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

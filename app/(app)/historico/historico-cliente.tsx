@@ -18,6 +18,13 @@ import { DisclaimerNota } from "@/components/disclaimer";
 import { TermoTecnico } from "@/components/educativo/termo-tecnico";
 import { RotuloRisco } from "@/components/risco/rotulo-risco";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { avaliarVencimento } from "@/lib/book";
 import { formatBRL, formatPreco } from "@/lib/format";
 import { salvarRascunho } from "@/lib/montador/rascunho";
@@ -525,18 +532,22 @@ function Filtro({
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-xs text-muted-foreground">{rotulo}</label>
-      <select
-        id={id}
+      <Select
         value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+        onValueChange={(v) => onChange((v ?? "") as string)}
+        items={opcoes.map((o) => ({ label: o.rotulo, value: o.valor }))}
       >
-        {opcoes.map((o) => (
-          <option key={o.valor} value={o.valor}>
-            {o.rotulo}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger id={id}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {opcoes.map((o) => (
+            <SelectItem key={o.valor} value={o.valor}>
+              {o.rotulo}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

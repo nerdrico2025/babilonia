@@ -28,16 +28,15 @@ sutil) e **6 Baixos** (polimento). Os Médios concentravam-se em (a) um botão
 para o termo errado e (c) o carimbo de frescor mostrando **hora** em dado que é de
 **fechamento (EOD)**.
 
-**Estado atual (22/06/2026):** os **3 Médios estão corrigidos** (M1, M2, M3); entre
-os Baixos, foram corrigidos o **#4** (junto do M2), o **#5** (coluna OI), o **#6**
-(selects nativos → shadcn), o **#7** (skeleton de loading na Análise) e o **#8**
-(selo de risco na linha colapsada). Resta **1 Baixo** (polimento), aberto.
+**Estado atual (22/06/2026):** **todos os 9 achados estão corrigidos** — os 3 Médios
+(M1, M2, M3) e os 6 Baixos (#4, #5, #6, #7, #8, #9). Auditoria encerrada; nenhum
+item aberto.
 
 | Severidade | Total | Corrigidos | Abertos |
 | ---------- | ----- | ---------- | ------- |
 | Alta       | 0     | 0          | 0       |
 | Média      | 3     | 3          | 0       |
-| Baixa      | 6     | 5          | 1       |
+| Baixa      | 6     | 6          | 0       |
 
 ## 2. Tabela de achados
 
@@ -51,7 +50,7 @@ os Baixos, foram corrigidos o **#4** (junto do M2), o **#5** (coluna OI), o **#6
 | 6 | Ticket, Histórico | Visual (consistência) | Baixa | Usam `<select>` **HTML nativo**; o componente shadcn `ui/select.tsx` existe e **não é usado em lugar nenhum** — selects destoam do design system. | Padronizar nos selects shadcn, ou assumir o nativo e remover o componente órfão. | ✅ `80cad56` |
 | 7 | Análise | Fluxo / Visual (loading) | Baixa | Durante a busca, só o spinner do botão aparece; a área dos 3 blocos fica **em branco** (cadeia/screening/backtest têm aviso de loading; a análise não). | Mostrar aviso/skeleton "Carregando análise de XXXX…" enquanto busca. | ✅ `e1bf4ba` |
 | 8 | Dashboard | Princípio (§2 rótulo) | Baixa | Na linha **colapsada** da posição, o selo `RotuloRisco` (DEFINIDO/INDEFINIDO) só aparece ao expandir; colapsada mostra só o texto "INDEFINIDO"/valor. | Exibir um mini-selo DEFINIDO/INDEFINIDO também na linha colapsada. | ✅ `5796171` |
-| 9 | (infra) | Visual (dívida) | Baixa | `EmConstrucao` ("chega na Fase 1") em `layout/pagina.tsx` é **código morto** — nenhuma tela o usa mais (Fases 0–3 concluídas). | Remover o componente `EmConstrucao` para não voltar a aparecer por engano. | 🔴 aberto |
+| 9 | (infra) | Visual (dívida) | Baixa | `EmConstrucao` ("chega na Fase 1") em `layout/pagina.tsx` é **código morto** — nenhuma tela o usa mais (Fases 0–3 concluídas). | Remover o componente `EmConstrucao` para não voltar a aparecer por engano. | ✅ `02ad824` |
 
 ## 3. Achados por tela (Média e Alta — detalhe)
 
@@ -163,5 +162,7 @@ foco desta passada):
 | 22/06/2026 | #7 (B2) | `e1bf4ba` | `fix(ux): skeleton de loading nos blocos da análise — elimina área em branco (B2)` — criado o componente `Skeleton` (shadcn, não estava instalado) e um placeholder de três cartões exibido na 1ª busca (`carregando && !dadosAtivo`). |
 | 22/06/2026 | #8 (B3) | `5796171` | `fix(ux): RotuloRisco visível na linha colapsada do dashboard (B3)` — `<RotuloRisco>` (componente existente) adicionado à linha resumida da posição, com `tipo` derivado de `p.riskDefined`; oculto só em telas estreitas (`hidden lg:inline-flex`) por ser uma pílula larga. |
 | 22/06/2026 | #6 (B4) | `80cad56` | `fix(ux): substitui <select> nativo pelo Select shadcn/ui (B4)` — os 2 `<select>` nativos (helpers `CampoSelect` no ticket e `Filtro` no histórico) passaram a usar o `Select` (Base UI), com contrato dos helpers inalterado. **Correção do diagnóstico:** o `ui/select.tsx` estava **órfão** (ninguém o importava); agora tem consumidores. Import `cn` órfão removido do ticket. |
+| 22/06/2026 | #9 (B5) | `02ad824` | `chore: remove componente EmConstrucao sem uso (B5)` — função morta `EmConstrucao` (placeholder "chega na Fase 1") removida de `layout/pagina.tsx` + import órfão de `Hammer`; `Pagina`/`PaginaCabecalho` intactos. |
 
-**Próximos candidatos (Baixos abertos):** #9 (`EmConstrucao` morto).
+**Auditoria encerrada (22/06/2026):** todos os 9 achados corrigidos. Não há itens
+abertos. Reabrir esta página se uma nova passada de UX levantar achados.

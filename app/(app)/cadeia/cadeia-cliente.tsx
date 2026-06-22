@@ -270,8 +270,8 @@ export function CadeiaCliente() {
       {/* Estados iniciais / de erro. */}
       {!ativo && !dados && (
         <p className="text-sm text-muted-foreground">
-          Busque um ticker da B3 (ex.: PETR4) para ver as{" "}
-          <TermoTecnico termo="strike">calls e puts</TermoTecnico> por vencimento e strike.
+          Busque um ticker da B3 (ex.: PETR4) para ver as calls e puts por
+          vencimento e <TermoTecnico termo="strike">strike</TermoTecnico>.
         </p>
       )}
 

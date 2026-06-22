@@ -431,6 +431,15 @@ export const GLOSSARIO: readonly Termo[] = [
     categoria: "Operação",
   },
   {
+    slug: "ticker",
+    termo: "Ticker da opção",
+    curto:
+      "O código de negociação de uma série de opção na B3 (ex.: PETRE450).",
+    longo:
+      "O ticker da opção é o código exato pelo qual a série é negociada na B3 (ex.: PETRE450) — diferente do ticker do ativo-objeto (PETR4). É esse código que você digita no home broker para enviar a ordem da opção certa: tipo (call/put), vencimento e strike já estão embutidos nele.",
+    categoria: "Operação",
+  },
+  {
     slug: "ticket",
     termo: "Ticket de operação",
     curto:

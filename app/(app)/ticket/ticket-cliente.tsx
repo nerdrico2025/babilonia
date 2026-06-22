@@ -322,7 +322,7 @@ export function TicketCliente() {
             <CardHeader>
               <CardTitle>Dados de execução das pernas</CardTitle>
               <CardDescription>
-                Informe o <TermoTecnico termo="strike">ticker</TermoTecnico> exato de cada
+                Informe o <TermoTecnico termo="ticker">ticker</TermoTecnico> exato de cada
                 opção, como aparece no home broker.
               </CardDescription>
             </CardHeader>

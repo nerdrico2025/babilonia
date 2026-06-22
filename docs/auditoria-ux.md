@@ -29,14 +29,14 @@ para o termo errado e (c) o carimbo de frescor mostrando **hora** em dado que é
 **fechamento (EOD)**.
 
 **Estado atual (22/06/2026):** os **3 Médios estão corrigidos** (M1, M2, M3); entre
-os Baixos, o #4 saiu na correção do M2 e o **#5 (coluna OI) foi corrigido**. Restam
-**4 Baixos** (polimento), abertos.
+os Baixos, foram corrigidos o **#4** (junto do M2), o **#5** (coluna OI) e o **#7**
+(skeleton de loading na Análise). Restam **3 Baixos** (polimento), abertos.
 
 | Severidade | Total | Corrigidos | Abertos |
 | ---------- | ----- | ---------- | ------- |
 | Alta       | 0     | 0          | 0       |
 | Média      | 3     | 3          | 0       |
-| Baixa      | 6     | 2          | 4       |
+| Baixa      | 6     | 3          | 3       |
 
 ## 2. Tabela de achados
 
@@ -48,7 +48,7 @@ os Baixos, o #4 saiu na correção do M2 e o **#5 (coluna OI) foi corrigido**. R
 | 4 | Cadeia | Princípio (educativo) | Baixa | Hint inicial embrulha **"calls e puts"** em `<TermoTecnico termo="strike">` (termo trocado). | Usar termo próprio (ou nenhum) para "calls e puts"; reservar "strike" para o strike. | ✅ `484a572` |
 | 5 | Cadeia | Visual / Princípio (§6.4) | Baixa | Coluna **"OI"** sempre exibe "n/d" (open interest não existe na fonte) — jargão e ruído permanentes para o leigo. | Remover a coluna OI (a nota de liquidez já explica) ou rebaixar para tooltip do cabeçalho. | ✅ `bf0de23` |
 | 6 | Ticket, Histórico | Visual (consistência) | Baixa | Usam `<select>` **HTML nativo**; o componente shadcn `ui/select.tsx` existe e **não é usado em lugar nenhum** — selects destoam do design system. | Padronizar nos selects shadcn, ou assumir o nativo e remover o componente órfão. | 🔴 aberto |
-| 7 | Análise | Fluxo / Visual (loading) | Baixa | Durante a busca, só o spinner do botão aparece; a área dos 3 blocos fica **em branco** (cadeia/screening/backtest têm aviso de loading; a análise não). | Mostrar aviso/skeleton "Carregando análise de XXXX…" enquanto busca. | 🔴 aberto |
+| 7 | Análise | Fluxo / Visual (loading) | Baixa | Durante a busca, só o spinner do botão aparece; a área dos 3 blocos fica **em branco** (cadeia/screening/backtest têm aviso de loading; a análise não). | Mostrar aviso/skeleton "Carregando análise de XXXX…" enquanto busca. | ✅ `e1bf4ba` |
 | 8 | Dashboard | Princípio (§2 rótulo) | Baixa | Na linha **colapsada** da posição, o selo `RotuloRisco` (DEFINIDO/INDEFINIDO) só aparece ao expandir; colapsada mostra só o texto "INDEFINIDO"/valor. | Exibir um mini-selo DEFINIDO/INDEFINIDO também na linha colapsada. | 🔴 aberto |
 | 9 | (infra) | Visual (dívida) | Baixa | `EmConstrucao` ("chega na Fase 1") em `layout/pagina.tsx` é **código morto** — nenhuma tela o usa mais (Fases 0–3 concluídas). | Remover o componente `EmConstrucao` para não voltar a aparecer por engano. | 🔴 aberto |
 
@@ -159,7 +159,8 @@ foco desta passada):
 | 22/06/2026 | M3 | `1dd7736` | `fix(ux): FrescorBadge não promete realtime em dado EOD; aviso EOD no bloco Volatilidade (M3)` — prop `tipoFonte` (default `eod`); Fundamentalista marcado `realtime`; aviso EOD na Volatilidade. |
 | 22/06/2026 | M1 | `81a918c` | `fix(ux): remove/habilita botão "em breve" no montador — recurso de cadeia já existe (M1)` — botão desabilitado removido (Opção A) e substituído por link de descoberta para a Cadeia. |
 | 22/06/2026 | #5 (B1) | `bf0de23` | `fix(ux): coluna OI na cadeia — conecta dado real ou remove com aviso honesto (B1)` — investigação confirmou que OI **não existe no COTAHIST** (nem no layout B3 Rev 02, nem no schema/parser); coluna 100% "n/d" removida. A nota honesta `NOTA_LIQUIDEZ` (visível abaixo da tabela) e o verbete "open-interest" no glossário já explicam a ausência. |
+| 22/06/2026 | #7 (B2) | `e1bf4ba` | `fix(ux): skeleton de loading nos blocos da análise — elimina área em branco (B2)` — criado o componente `Skeleton` (shadcn, não estava instalado) e um placeholder de três cartões exibido na 1ª busca (`carregando && !dadosAtivo`). |
 
 **Próximos candidatos (Baixos abertos):** #6 (`<select>` nativo vs. shadcn `Select`
-órfão), #7 (loading em branco na Análise), #8 (selo DEFINIDO/INDEFINIDO na linha
-colapsada do Dashboard), #9 (`EmConstrucao` morto).
+órfão), #8 (selo DEFINIDO/INDEFINIDO na linha colapsada do Dashboard), #9
+(`EmConstrucao` morto).

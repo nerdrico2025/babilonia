@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -488,13 +489,20 @@ function PassoPernas(props: {
             <CardDescription>{def.resumoPernas}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {/* Origem das pernas: manual agora; da cadeia chega com o Prompt 13. */}
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span>Preencha os strikes e prêmios manualmente.</span>
-              <Button variant="outline" size="sm" disabled>
-                <Table2 className="size-3.5" aria-hidden />
-                Trazer da cadeia (em breve)
-              </Button>
+            {/* Origem das pernas: digitar à mão OU trazer da Cadeia (fluxo já existente:
+                selecionar séries lá → "Montar estrutura" pré-preenche este passo). */}
+            <div className="flex items-start gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <Table2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>
+                Preencha os strikes e prêmios manualmente — ou{" "}
+                <Link
+                  href="/cadeia"
+                  className="font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                >
+                  escolha as séries na Cadeia
+                </Link>{" "}
+                e elas vêm preenchidas aqui automaticamente.
+              </span>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

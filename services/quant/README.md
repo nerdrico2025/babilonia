@@ -355,14 +355,20 @@ time curl -s -o /dev/null $URL/health
 
 Se o cold start observado se aproximar de 25 s, aumente `TIMEOUT_PADRAO_MS`.
 
-### Pendência (não bloqueia o deploy): role read-only no Postgres
+### Role read-only no Postgres — script pronto, aplicação manual pendente
 
 A conexão já abre em `default_transaction_read_only=on` (runtime), mas a **defesa
 definitiva** é um usuário/role do Postgres com **apenas `SELECT`** nas tabelas
-lidas (`opcao_cotahist`, `acao_cotahist`, `iv_history`, `watchlist`). Hoje a
-`DATABASE_URL` usa a role padrão (read/write). Criar essa role de leitura e
-trocar a `DATABASE_URL` do Railway para ela é **tarefa separada** — registrar e
-não esquecer.
+lidas (`watchlist`, `opcao_cotahist`, `acao_cotahist` — e `iv_history` como
+reserva para a superfície de IV futura). Hoje a `DATABASE_URL` usa a role padrão
+(read/write).
+
+**Status:** o script SQL (CREATE ROLE + GRANTs de SELECT) e o passo a passo da
+nova connection string (formato direto, não-pooler) estão prontos em
+[`docs/neon-readonly-role.md`](docs/neon-readonly-role.md). **Falta aplicar à
+mão**: criar a role no console Neon e trocar a `DATABASE_URL` do Railway para ela
+(precisa de acesso ao console Neon + Railway). Após trocar e validar a env var,
+marcar como concluído.
 
 ## Estrutura
 
@@ -397,3 +403,11 @@ services/quant/
   pyproject.toml       deps + config do pytest
   .env.example         template de variáveis (sem valores reais)
 ```
+
+## Superfície de IV — adiada (Fase 3)
+
+Prevista na Fase 3, a **superfície de IV** foi **adiada** (não descartada).
+Implementar quando o usuário começar a operar **calendários/diagonais** —
+estruturas cuja tese depende da relação de IV entre vencimentos. Até lá, o IV Rank
++ skew já cobrem as decisões; a fronteira de leitura (`iv_history`) já está
+reservada em `dados.py`/`db.py` para essa implementação futura.

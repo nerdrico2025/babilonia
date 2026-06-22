@@ -298,3 +298,14 @@ do drizzle-kit — por isso `db:generate` faz parte do smoke test).
 - **Fase 3 — Quant (opcional):** microserviço Python — incl. **modelo
   americano/binomial e ajuste de dividendos** para o pricing (revisão da
   simplificação do MVP).
+
+## Estado atual do projeto
+
+- **Fases 0–3 concluídas.** App funcional para uso (ver `docs/aceite-mvp.md` §"Fase
+  3 — Encerramento").
+- **Microserviço de quant:** deployado e validado em produção —
+  `https://babilonia-production.up.railway.app` (screening + backtest; consumido
+  via `QUANT_SERVICE_URL`).
+- **Superfície de IV:** **adiada** (não descartada) — aguarda o usuário começar a
+  operar **calendários/diagonais**; até lá, **IV Rank + skew** cobrem as decisões.
+- **Próximo passo planejado:** revisão de UX.

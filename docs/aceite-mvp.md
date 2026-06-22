@@ -149,3 +149,31 @@ como **histórico** — não reintroduzir.
 **MVP pronto para a Fase 2.** Todos os 9 critérios do §16 atendidos com evidência no
 código atual; portões verdes; sem regressões pós-migração. Única ressalva (não
 bloqueante, pré-existente): rotacionar os valores reais em `.env.example`.
+
+## Fase 3 — Encerramento
+
+**Data:** 22/06/2026.
+
+**O que foi construído e validado:**
+
+- **Microserviço de quant (FastAPI no Railway).** `POST /screening` (ranqueia
+  estruturas de risco definido por ganho/risco, com filtro de liquidez/capital) e
+  `POST /backtest` (mark-to-market diário **com ajuste de strike por provento**).
+  Deployado e validado em produção.
+- **Role read-only `quant_readonly` no Neon.** O serviço conecta com permissão
+  apenas de `SELECT` nas tabelas que lê (`watchlist`, `opcao_cotahist`,
+  `acao_cotahist`; `iv_history` reservada), além do `default_transaction_read_only=on`
+  em runtime — defesa em duas camadas contra qualquer escrita acidental.
+- **Validação em produção:** screening e backtest exercitados com dados reais de
+  **PETR4** e **VALE3**.
+- **Testes de banco real com timeout corrigido:** o timeout do Vitest subiu para
+  15 s e o pool passou a `forks` (cold start de um arquivo não bloqueia outro) —
+  commit `8326817`.
+
+**Superfície de IV — decisão registrada:** **adiada, não descartada.** Só fará
+sentido quando o usuário começar a operar **calendários ou diagonais** (estruturas
+cuja tese depende da relação de IV entre vencimentos). Por ora, **IV Rank + skew**
+já cobrem todas as decisões reais. A fronteira no microserviço fica pronta para a
+implementação futura, sem custo de manutenção enquanto não for usada.
+
+**Status geral:** **Fases 0, 1, 2 e 3 concluídas.** App funcional para uso.

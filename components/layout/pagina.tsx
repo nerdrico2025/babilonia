@@ -1,5 +1,3 @@
-import { Hammer } from "lucide-react";
-
 import { cn } from "@/lib/utils";
 
 /**
@@ -52,35 +50,5 @@ export function PaginaCabecalho({
       </div>
       {acoes && <div className="flex shrink-0 items-center gap-2">{acoes}</div>}
     </header>
-  );
-}
-
-/**
- * Painel "em construção" — esta entrega é só a CASCA (navegação + componentes
- * educativos). A lógica de dados de cada tela chega na Fase 1; este bloco diz
- * isso ao usuário em linguagem clara, sem deixar a tela vazia.
- */
-export function EmConstrucao({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border border-dashed border-border bg-card/50 p-6 sm:p-8",
-        className,
-      )}
-    >
-      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-dourado/40 bg-dourado/10 px-3 py-1 text-xs font-medium text-foreground/70">
-        <Hammer className="size-3.5 text-dourado" aria-hidden />
-        Em construção — chega na Fase 1
-      </div>
-      <div className="prose-sm max-w-2xl space-y-3 text-sm leading-relaxed text-muted-foreground">
-        {children}
-      </div>
-    </div>
   );
 }
